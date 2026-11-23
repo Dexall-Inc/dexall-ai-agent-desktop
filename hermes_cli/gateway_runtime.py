@@ -321,11 +321,13 @@ def discover_gateway_endpoint(profile_home: str | Path, *, timeout: float = 2.0)
     A named profile served by the default multiplexer resolves to the multiplexer's endpoint
     with ``profile_id`` = the profile's own home, so clients attach to it with that identity.
     """
-    from hermes_cli.gateway_runtime_discovery import DiscoveryError, query_identify
+    from hermes_cli.gateway_runtime_discovery import DiscoveryError, query_identify, runtime_owner_is_exiting
 
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError("timeout must be finite and positive")
     home = _overlay_owner_home(Path(_canonical_home(profile_home)))
+    if runtime_owner_is_exiting(home):
+        return _missing_owner_verdict(home)
     try:
         return _endpoint(query_identify(home, timeout=timeout), home)
     except (FileNotFoundError, ConnectionRefusedError):
@@ -334,6 +336,8 @@ def discover_gateway_endpoint(profile_home: str | Path, *, timeout: float = 2.0)
             return served
         return _missing_owner_verdict(home)
     except TimeoutError:
+        if runtime_owner_is_exiting(home):
+            return _missing_owner_verdict(home)
         return GatewayDiscovery("inaccessible", reason_code="control_timeout")
     except DiscoveryError as exc:
         # The code stays bounded; the detail names the local node, its owner or mode, and the fix.

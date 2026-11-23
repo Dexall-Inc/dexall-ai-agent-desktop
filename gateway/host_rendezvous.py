@@ -619,7 +619,9 @@ def record_names_live_owner(record: HostRecord) -> bool:
     flock falsifies a record whose pid merely looks alive (recycle, start-tick collision after a
     reboot — #138343, #133744). Every reader that trusts a record as a running owner uses this.
     """
-    if not liveness_is_proven(record):
+    from gateway.darwin_exit_lock import process_is_exiting
+
+    if process_is_exiting(record.pid, record.start_time) or not liveness_is_proven(record):
         return False
     if host_lock_is_held(record.role) is False:
         logger.debug("host %s record names pid %s but the host lock is free", record.role, record.pid)

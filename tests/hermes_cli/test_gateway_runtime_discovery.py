@@ -335,3 +335,15 @@ def test_upgraded_same_owner_0644_lock_is_narrowed_not_inaccessible(tmp_path):
     os.link(lock, tmp_path / 'alias')
     assert missing_owner_state(home) == 'inaccessible'
     assert stat.S_IMODE(lock.stat().st_mode) == 0o644
+
+
+def test_discovery_allows_restart_when_the_runtime_owner_is_exiting(tmp_path, monkeypatch):
+    from hermes_cli import gateway_runtime as runtime, gateway_runtime_discovery as discovery
+
+    def should_not_query(*_args, **_kwargs):
+        pytest.fail("the exiting gateway's socket cannot answer")
+
+    monkeypatch.setattr(discovery, "runtime_owner_is_exiting", lambda home: home == tmp_path)
+    monkeypatch.setattr(discovery, "query_identify", should_not_query)
+
+    assert runtime.discover_gateway_endpoint(tmp_path).state == "absent"

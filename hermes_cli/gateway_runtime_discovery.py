@@ -230,6 +230,24 @@ def _private_lock(lock: Path) -> None:
         _private_node(lock, kind="file")
 
 
+def runtime_owner_is_exiting(home: Path) -> bool:
+    """Read-only proof that a held, private macOS lock can be reclaimed at startup."""
+    import sys
+    if sys.platform != "darwin":
+        return False
+    from gateway.darwin_exit_lock import process_is_exiting
+    from gateway.status import _pid_from_record, _read_gateway_lock_record
+
+    lock = home / "gateway.lock"
+    try:
+        _private_lock(lock)
+    except (OSError, DiscoveryError):
+        return False
+    record = _read_gateway_lock_record(lock) or {}
+    pid = _pid_from_record(record)
+    return pid is not None and process_is_exiting(pid, record.get("start_time"))
+
+
 def missing_owner_state(home: Path) -> Literal["starting", "absent", "inaccessible"]:
     """A reservation before PID/control publication already excludes a new owner."""
     from gateway.status import _is_gateway_runtime_lock_active_strict
@@ -237,7 +255,8 @@ def missing_owner_state(home: Path) -> Literal["starting", "absent", "inaccessib
     try:
         if os.name != "nt":
             _private_lock(lock)
-        return "starting" if _is_gateway_runtime_lock_active_strict(lock) else "absent"
+        held = _is_gateway_runtime_lock_active_strict(lock)
+        return "starting" if held and not runtime_owner_is_exiting(home) else "absent"
     except FileNotFoundError:
         return "absent"
     except (OSError, RuntimeError, DiscoveryError):
