@@ -858,13 +858,10 @@ def target_bytes(art: IconArt, kind: str, arg: object) -> bytes:
     elif kind == "ico_dark":
         img = render(art.master_dark, max(arg))
         img.save(buf, format="ICO", sizes=[(s, s) for s in arg])
-    elif kind == "icns":
-        img = render(art.master_mac, 1024)
-        frames = [img.resize((s, s), Image.LANCZOS) for s in (16, 32, 64, 128, 256, 512, 1024)]
-        img.save(buf, format="ICNS", append_images=frames[1:])
-    elif kind == "icns_dark":
-        img = render(art.master_mac_dark, 1024)
+    elif kind in ("icns", "icns_dark"):
+        img = render(art.master_mac_dark if kind == "icns_dark" else art.master_mac, 1024)
         if art.tact_mark:
+            # Keep grayscale TACT frames within the blob budget without changing pixels.
             red, green, blue, _ = img.split()
             if red.tobytes() == green.tobytes() == blue.tobytes():
                 img = img.convert("LA")
