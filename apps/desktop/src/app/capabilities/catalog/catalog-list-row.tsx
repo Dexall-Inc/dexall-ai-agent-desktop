@@ -39,7 +39,7 @@ export function CatalogListRow({
       data-entry-id={entry.id}
     >
       <RowButton
-        aria-label={entry.name}
+        aria-label={entry.displayName ?? entry.name}
         aria-pressed={selected}
         className="absolute inset-0 rounded-md focus-visible:outline-2 focus-visible:outline-primary focus-visible:-outline-offset-2"
         onClick={() => onOpen(entry)}
@@ -51,7 +51,7 @@ export function CatalogListRow({
       />
       <span className="pointer-events-none min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="truncate text-[0.78rem] font-medium">{entry.name}</span>
+          <span className="truncate text-[0.78rem] font-medium">{entry.displayName ?? entry.name}</span>
           {installed && <Codicon className="shrink-0 text-(--ui-text-tertiary)" name="check" />}
           {entry.locked && (
             <span

@@ -11,6 +11,7 @@ export type CatalogKind = 'skills' | 'plugins'
 export interface CatalogEntry {
   id: string
   name: string
+  displayName?: string
   description: string
   overview: string
   category: string
@@ -129,6 +130,7 @@ function catalogEntry(kind: CatalogKind, row: any): CatalogEntry {
   // as their name; show the slug instead of a blank title.
   const name = /[\p{L}\p{N}]/u.test(rawName) ? rawName : text(row.identifier) || rawName
   const source = text(kind === 'plugins' ? row.tier : row.source)
+  const displayName = kind === 'skills' && source === 'built-in' && rawName === 'hermes-agent' ? 'TACT' : undefined
   const identifier = text(row.identifier) || rawName
   const caps = row.capabilities ?? {}
   const category = text(row.category) || 'uncategorized'
@@ -146,6 +148,7 @@ function catalogEntry(kind: CatalogKind, row: any): CatalogEntry {
   return {
     id: `${source}:${identifier}`,
     name,
+    ...(displayName && { displayName }),
     description,
     overview: text(row.overview),
     category,
@@ -170,6 +173,7 @@ function catalogEntry(kind: CatalogKind, row: any): CatalogEntry {
     ...catalogSignals(kind, row),
     search: [
       name,
+      displayName,
       description,
       text(row.overview),
       author,

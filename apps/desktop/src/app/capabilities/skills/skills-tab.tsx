@@ -272,7 +272,7 @@ function ScopedSkillsTab({
               </span>
             )}
             <CatalogSwitch
-              aria-label={skill.name}
+              aria-label={skill.name === 'hermes-agent' && (!skill.provenance || skill.provenance === 'bundled') ? 'TACT' : skill.name}
               checked={skill.enabled}
               disabled={controlsDisabled}
               onCheckedChange={enabled => void applyEnabled([skill], enabled)}

@@ -98,6 +98,7 @@ function mergeInstalled(
       {
         ...entry,
         id: installed.id,
+        displayName: installed.displayName ?? entry.displayName,
         version: installed.version || entry.version,
         locked: installed.locked,
         usage: installed.usage,

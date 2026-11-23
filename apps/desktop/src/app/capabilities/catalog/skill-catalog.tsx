@@ -124,7 +124,10 @@ function ScopedSkillCatalog({
         name: skill.name,
         description: skill.description,
         category: skill.category,
-        source: skill.provenance === 'bundled' ? 'built-in' : skill.provenance === 'hub' ? 'hub' : 'local'
+        source:
+          skill.provenance === 'bundled' || (!skill.provenance && skill.name === 'hermes-agent')
+            ? 'built-in'
+            : skill.provenance === 'hub' ? 'hub' : 'local'
       }))
     ).map(entry => {
       const skill = skillsByName.get(entry.name)!

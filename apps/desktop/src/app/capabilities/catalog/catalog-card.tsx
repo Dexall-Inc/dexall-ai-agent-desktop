@@ -117,11 +117,11 @@ export function CatalogCard({ entry, action, accentIndex, onOpen, onCategory, on
               detail; real controls sit above it (`relative`). One focus stop per card. */}
           <RowButton
             aria-haspopup="dialog"
-            aria-label={entry.name}
+            aria-label={entry.displayName ?? entry.name}
             className="min-w-0 flex-1 text-left font-semibold leading-snug after:absolute after:inset-0 after:rounded-[inherit] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-primary focus-visible:after:-outline-offset-2"
             onClick={() => onOpen(entry)}
           >
-            <span className="catalog-card-title line-clamp-2 min-w-0 break-words text-lg">{variant === 'default' ? entry.name : catalogLabel(entry.name)}</span>
+            <span className="catalog-card-title line-clamp-2 min-w-0 break-words text-lg">{entry.displayName ?? (variant === 'default' ? entry.name : catalogLabel(entry.name))}</span>
           </RowButton>
           {variant === 'default' && action && (
             <span className="relative shrink-0 opacity-[.66] transition-opacity group-hover:opacity-100 group-hover:transition-none group-focus-within:opacity-100 group-focus-within:transition-none">

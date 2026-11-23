@@ -297,7 +297,7 @@ TARGETS: list[tuple[str, str, object]] = [
 class IconArt:
     """One generation's rendering inputs and caches; never writes to source."""
 
-    def __init__(self, source: Path, *, colors: tuple[str, str] | None = None, commit: str = "", tact_mark: dict[str, str] | None = None):
+    def __init__(self, source: Path, *, colors: tuple[str, str] | None = None, commit: str = "", tact_mark: str | None = None):
         assets = source / "assets"
         self.source = source
         self.colors = colors
@@ -459,20 +459,13 @@ def drag_bottom_nodes(path: ET.Element, *, cutoff: float, band: float, distance:
     path.set("d", " ".join(tokens))
 
 
-def tact_mark_data(source: Path) -> dict[str, str]:
-    # Extract the supplied monochrome ink to use the same illustration over
-    # the light, dark and release-flavor plates.
+def tact_mark_data(source: Path) -> str:
+    # Preserve the supplied portrait's tones and alpha on every icon plate.
     with Image.open(source / "assets/tact-desktop.png") as image:
-        luminance = image.convert("L")
-    alpha = luminance.point(lambda value: max(0, min(255, (250 - value) * 255 // 240)))
-    layers = {}
-    for ink in ("black", "white"):
-        mark = Image.new("RGBA", alpha.size, ink)
-        mark.putalpha(alpha)
-        buf = io.BytesIO()
-        save_png(mark, buf)
-        layers[ink] = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
-    return layers
+        mark = image.convert("LA")
+    buf = io.BytesIO()
+    mark.save(buf, "PNG", optimize=True)
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 def portrait_layer(art: IconArt, girl: str, bg: str, join_bottom: float) -> ET.Element:
@@ -482,7 +475,7 @@ def portrait_layer(art: IconArt, girl: str, bg: str, join_bottom: float) -> ET.E
         x, y, size = (100, 100, 824) if "-mac-" in bg else (0, 0, 1024)
         return ET.Element("image", {
             "x": str(x), "y": str(y), "width": str(size), "height": str(size),
-            "{http://www.w3.org/1999/xlink}href": art.tact_mark[girl],
+            "{http://www.w3.org/1999/xlink}href": art.tact_mark,
         })
 
     box = GIRL_BOXES[bg]

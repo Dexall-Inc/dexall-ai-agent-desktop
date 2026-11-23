@@ -77,6 +77,10 @@ export function SkillDetail({
     [contentQuery.data]
   )
 
+  const body = parsed?.body.trim()
+  const isBundledTact = skill.name === 'hermes-agent' && (!skill.provenance || skill.provenance === 'bundled')
+  const displayBody = isBundledTact ? body?.replace(/^# Hermes Agent(?=\r?$)/m, '# TACT') : body
+
   return (
     <>
       <div className="grid gap-1">
@@ -113,7 +117,7 @@ export function SkillDetail({
           className="overflow-auto whitespace-pre-wrap wrap-break-word font-mono text-[0.68rem] leading-relaxed text-(--ui-text-secondary)"
           data-selectable-text="true"
         >
-          {parsed.body.trim() || t.skills.noDescription}
+          {displayBody || t.skills.noDescription}
         </pre>
       ) : null}
     </>

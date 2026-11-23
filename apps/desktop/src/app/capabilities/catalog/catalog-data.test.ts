@@ -5,6 +5,18 @@ import { fetchCatalog, parseCatalog } from './catalog-data'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('public catalog data', () => {
+  it('shows the bundled TACT guide without changing its skill identity', () => {
+    const [bundled, community] = parseCatalog('skills', [
+      { name: 'hermes-agent', source: 'built-in' },
+      { name: 'hermes-agent', source: 'community', identifier: 'community/hermes-agent' }
+    ])
+
+    expect(bundled).toMatchObject({ name: 'hermes-agent', identifier: 'hermes-agent', displayName: 'TACT' })
+    expect(bundled.search).toContain('tact')
+    expect(bundled.search).toContain('hermes-agent')
+    expect(community.displayName).toBeUndefined()
+  })
+
   it('preserves every source and distinct install identifier, including same-named skills', () => {
     const rows = ['official', 'github', 'community', 'future-source'].map(source => ({
       name: 'research',
