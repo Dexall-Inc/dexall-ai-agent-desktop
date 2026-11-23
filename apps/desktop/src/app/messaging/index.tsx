@@ -769,7 +769,7 @@ function PlatformDetail({
             )}
           </div>
           <p className="mt-1 text-[length:var(--conversation-caption-font-size)] leading-(--conversation-caption-line-height) text-(--ui-text-tertiary)">
-            {platform.description}
+            {m.platformDescription?.[platform.id] || platform.description}
           </p>
           <PlatformHint platform={platform} />
         </div>

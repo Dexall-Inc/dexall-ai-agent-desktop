@@ -2407,6 +2407,7 @@ export interface Translations extends NoticeTranslations {
       savedRestartFailed: (detail: string) => string
     }
     fieldCopy: Record<string, { label?: string; help?: string; placeholder?: string }>
+    platformDescription?: Record<string, string>
     platformIntro: Record<string, string>
   }
 

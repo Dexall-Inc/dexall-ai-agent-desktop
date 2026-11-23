@@ -60,10 +60,18 @@ export const jaCatalog = {
   retry: '再試行',
   more: 'さらに表示',
   pinned: 'レビュー済みコミット',
-  snapshotHint: 'Hermesカタログの情報です。閲覧時に提供元のリポジトリへ接続することはありません。',
+  snapshotHint: 'スキルカタログの情報です。閲覧時に提供元のリポジトリへ接続することはありません。',
   installHint: 'インストール前にソースを確認してください。変更は新しいセッションに適用されます。',
   results: (count: number) => `${count.toLocaleString('ja')}件の結果`,
-  back: '結果に戻る'
+  back: '結果に戻る',
+  developer: {
+    heading: '開発者モード',
+    title: 'TACT の機能を拡張する',
+    pitch: 'ツール、コネクター、プラグイン、Mod を作成できます。',
+    pitchFollowUp: '開発方法はドキュメントをご覧ください。',
+    submit: 'Mod を投稿',
+    docs: '開発者向けドキュメント'
+  }
 } satisfies TranslationOverrides['catalog']
 
 export const jaSkillDeepLink = {

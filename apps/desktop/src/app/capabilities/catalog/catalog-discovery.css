@@ -87,16 +87,13 @@
 [data-catalog-variant=horizontal] .catalog-card-topline { order: 2; padding: 0; }
 [data-catalog-variant=horizontal] .catalog-card-topline > span:first-child { display: none; }
 [data-catalog-variant=horizontal] .catalog-card-image { display: none; }
-.catalog-developer { position: relative; isolation: isolate; aspect-ratio: 3 / 1; min-height: 280px; overflow: hidden; border-radius: var(--radius-lg); background: var(--ui-chat-bubble-background); padding: 32px; }
-.catalog-developer-art { position: absolute; width: 42%; height: 225%; right: 13%; top: -58%; transform: rotate(48deg); pointer-events: none; background: color-mix(in srgb, var(--color-primary) 70%, transparent); mask: url('../../../assets/catalog-wing-retro.svg') center / contain no-repeat; mask-mode: luminance; mix-blend-mode: multiply; }
-:root.dark .catalog-developer-art { mix-blend-mode: screen; }
-.catalog-developer-content { position: relative; height: 100%; min-height: 216px; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
-.catalog-developer-mark { display: block; width: 30px; height: 18px; background: var(--ui-text-primary); mask: url('../../../assets/catalog-wing-retro.svg') center / contain no-repeat; mask-mode: luminance; transform: rotate(48deg) scale(2); }
+.catalog-developer { position: relative; isolation: isolate; min-height: 240px; overflow: hidden; border-radius: var(--radius-lg); border: 1px solid var(--color-border); background: linear-gradient(120deg, var(--color-card) 50%, var(--color-accent)); padding: 32px; }
+.catalog-developer-content { position: relative; min-height: 176px; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
 .catalog-developer h3 { font-size: 2rem; font-weight: 600; letter-spacing: -.025em; line-height: 1.1; }
 .catalog-developer-content p { max-width: 340px; }
 .catalog-developer-ctas { display: flex; flex-wrap: wrap; gap: 4px; margin-top: auto; padding-top: 28px; }
 .catalog-developer-management { display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; }
-@container (max-width: 540px) { .catalog-developer { aspect-ratio: auto; padding: 24px; } .catalog-developer-art { right: -15%; background: color-mix(in srgb, var(--color-primary) 30%, transparent); } }
+@container (max-width: 540px) { .catalog-developer { padding: 24px; } }
 @container (max-width: 960px) { .catalog-bento, .catalog-feature-row, .catalog-filtered-results > :is(.masonry, .catalog-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); } .catalog-bento { grid-auto-flow: row dense; } .catalog-bento > [data-catalog-card] { grid-column: auto / span var(--bento-w, 1); grid-row: auto / span var(--bento-h, 1); } }
 @container (max-width: 720px) { .catalog-bento, .catalog-filtered-results > :is(.masonry, .catalog-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); } .catalog-banner-list { grid-template-columns: minmax(0, 1fr); } .catalog-section-heading { padding-top: 32px; } .catalog-filter-bar > div:first-child { flex-wrap: wrap; } }
 @container (max-width: 440px) { .catalog-bento, .catalog-feature-row, .catalog-filtered-results > :is(.masonry, .catalog-grid) { grid-template-columns: minmax(0, 1fr); } .catalog-bento > [data-catalog-card] { grid-column: auto; grid-row: auto; } [data-catalog-variant=hero] .catalog-card-copy { max-width: 100%; } }

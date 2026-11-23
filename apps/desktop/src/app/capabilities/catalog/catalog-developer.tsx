@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { BrandMark } from '@/components/brand-mark'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { useI18n } from '@/i18n'
@@ -8,7 +9,7 @@ import { PLUGIN_CATALOG_DOCS_URL, SKILLS_DOCS_URL, SUBMIT_MOD_URL } from '@/lib/
 
 import type { CatalogKind } from './catalog-data'
 
-/** One banner for every catalog. The wing, copy and docs links are shared; the page supplies its own management actions. */
+/** One banner for every catalog. The branding, copy and docs links are shared; the page supplies its own management actions. */
 export function CatalogDeveloper({ kind, actions }: { kind: CatalogKind; actions?: ReactNode }) {
   const { t } = useI18n()
   const d = t.catalog.developer
@@ -17,9 +18,8 @@ export function CatalogDeveloper({ kind, actions }: { kind: CatalogKind; actions
     <section data-catalog-section="developer">
       <header className="catalog-section-heading"><h2>{d.heading}</h2></header>
       <div className="catalog-developer">
-        <div aria-hidden className="catalog-developer-art" />
         <div className="catalog-developer-content">
-          <span aria-hidden className="catalog-developer-mark" />
+          <BrandMark aria-hidden className="size-10 overflow-hidden rounded-lg" />
           <h3>{d.title}</h3>
           <p className="text-sm text-(--ui-text-secondary)">{d.pitch}<br />{d.pitchFollowUp}</p>
           <div className="catalog-developer-ctas">

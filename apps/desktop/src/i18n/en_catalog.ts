@@ -77,7 +77,7 @@ export const enCatalog: CatalogTranslations = {
   discoverKind: (kind: string) => `Discover ${kind}`,
   developer: {
     heading: 'Developer Mode',
-    title: 'Build for Hermes',
+    title: 'Build for TACT',
     pitch: 'Built a tool, connector, plugin, or Mod?',
     pitchFollowUp: 'Want to but don’t know how?',
     submit: 'Submit Mod',

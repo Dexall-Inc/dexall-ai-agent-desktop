@@ -579,7 +579,7 @@ export const jaOverrides = {
       modelPricingDesc: 'モデル選択で、100万トークンあたりの入力・出力・キャッシュ読み取り料金を表示します。',
       reactionsTitle: 'メッセージリアクション',
       reactionsDesc:
-        'iMessage風の絵文字タップバック — メッセージにリアクションでき、Hermesもあなたのメッセージにリアクションします。',
+        'iMessage風の絵文字タップバック — メッセージにリアクションでき、TACT もあなたのメッセージにリアクションします。',
       tipsTitle: 'アプリ内ヒント',
       tipsDesc:
         'アプリや TACT からのヒントをときどき表示します。各ヒントは一度だけ表示されます。利用開始から30日後に自動でオフになりますが、再びオンにできます。',
@@ -1342,7 +1342,12 @@ export const jaOverrides = {
       searching: '検索中…',
       noResults: '一致するスキルがハブにありません。',
       installed: 'インストール済み',
-      installStarted: name => `「${name}」をインストール中…`
+      installStarted: name => `「${name}」をインストール中…`,
+      updateAll: 'インストール済みスキルを更新',
+      updating: '更新中…',
+      updateStarted: 'インストール済みスキルを更新しています…',
+      actionLog: '操作ログ',
+      actionFailed: 'スキルの操作に失敗しました'
     },
     tabSkills: 'スキル',
     tabToolsets: 'ツールセット',
@@ -1814,7 +1819,34 @@ export const jaOverrides = {
         help: '推奨。電話番号または WhatsApp ID（1 欄に 1 件）。'
       }
     },
-    platformIntro: {}
+    platformDescription: {
+      telegram: 'Telegram のダイレクトメッセージ、グループ、トピックから TACT を利用できます。',
+      discord: 'Discord のダイレクトメッセージ、チャンネル、スレッドに TACT を接続します。',
+      matrix: 'Matrix のルームとダイレクトメッセージで TACT を利用できます。',
+      feishu: 'Feishu または Lark で TACT を利用できます。',
+      slack: 'Socket Mode で Slack から TACT を利用できます。ボットからの応答を許可する Slack メンバーの ID を追加してください。'
+    },
+    platformIntro: {
+      telegram: 'Telegram で @BotFather に /newbot を送信し、発行されたトークンをコピーします。@userinfobot で自分の数値ユーザー ID を確認してください。',
+      discord: 'Discord Developer Portal でアプリとボットを作成し、トークンをコピーします。必要な権限を設定してサーバーに招待してください。',
+      slack: 'Slack アプリを作成して Socket Mode を有効にし、ワークスペースにインストールします。ボットトークンとアプリレベルトークンをコピーしてください。',
+      mattermost: 'Mattermost でボットアカウントまたは個人アクセストークンを作成し、サーバー URL とトークンを入力します。',
+      matrix: 'ボットアカウントでホームサーバーにログインし、アクセストークン、ユーザー ID、ホームサーバー URL をコピーします。',
+      signal: '接続できる場所で signal-cli の REST ブリッジを起動し、ブリッジ URL と登録済みの電話番号を入力します。',
+      whatsapp: '付属の WhatsApp ブリッジを起動し、初回起動時の QR コードを読み取って連携を有効にします。',
+      bluebubbles: 'iMessage が利用できる Mac で BlueBubbles Server を実行し、API の URL とサーバーパスワードを入力します。',
+      homeassistant: 'Home Assistant のプロファイルで長期アクセストークンを作成し、Home Assistant の URL と一緒に入力します。',
+      email: '専用のメールボックスを使います。Gmail ではアプリパスワードを作成し、imap.gmail.com と smtp.gmail.com を指定します。',
+      sms: 'Twilio の管理画面でアカウント SID、認証トークン、SMS を送信できる電話番号を取得します。',
+      dingtalk: '開発者コンソールで DingTalk アプリを作成し、クライアント ID とクライアントシークレットをコピーします。',
+      feishu: 'Feishu または Lark でアプリを作成し、ボット機能を設定します。アプリ ID、アプリシークレット、イベント暗号化キーをコピーしてください。',
+      wecom: 'WeCom のグループロボットを追加し、Webhook キーをコピーします。双方向の連携には WeCom のアプリ連携を使います。',
+      wecom_callback: 'WeCom の自社アプリでコールバック URL を公開し、企業 ID、シークレット、エージェント ID、AES キーを入力します。',
+      weixin: 'hermes gateway setup を実行して Weixin を選び、個人の WeChat アカウントで QR コードを読み取って確認します。',
+      qqbot: 'QQ Open Platform（q.qq.com）でアプリを登録し、アプリ ID とクライアントシークレットをコピーします。',
+      api_server: 'TACT を OpenAI 互換 API として公開します。認証キーを設定し、利用するクライアントでホストとポートを指定します。',
+      webhook: '外部サービスから POST リクエストを受け付ける HTTP サーバーを起動します。シークレットを使って署名を検証します。'
+    }
   },
 
   profiles: {
@@ -2685,9 +2717,9 @@ export const jaOverrides = {
   },
 
   updates: {
-    discontinuedTitle: 'このHermesビルドはサポートされていません',
+    discontinuedTitle: 'この TACT ビルドはサポートされていません',
     discontinuedBody:
-      'このHermesビルドはサポートが終了し、動作しなくなる可能性があります。アンインストールしてください。データはディスクに残ります。',
+      'この TACT ビルドはサポートが終了し、動作しなくなる可能性があります。アンインストールしてください。データはディスクに残ります。',
     channels: { stable: '安定版', canary: '先行版' },
     bundleSwapPending: '再起動して更新を完了',
     bundleSwapPendingDesc:

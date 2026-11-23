@@ -16,6 +16,10 @@ export function displayName(bot: Partial<RosterRow>, meta?: BotMeta | null): str
   // identity: the friendly alias name must survive hosted-session
   // activation and Cloud-only rosters (#89131).
   const alias = aliasIdentityFor(bot)
+  const isDefault = (bot.name || '').trim().toLowerCase() === 'default'
+
+  const brandDefaultName = (title: string) =>
+    isDefault && !bot.remoteSource && /^hermes(?:\s*agent)?$/i.test(title) ? 'TACT' : title
 
   // The Bot Mode title the row's own backend reports: rich rows carry it in
   // ui_meta, thin rows from another connection as `title` (bot_title). Same
@@ -25,8 +29,7 @@ export function displayName(bot: Partial<RosterRow>, meta?: BotMeta | null): str
     : String(bot?.ui_meta?.['hermes-bots']?.title || (typeof bot?.title === 'string' ? bot.title : '')).trim()
 
   // Only THIN rows from another source trade the friendly name for their
-  // connection label — the active gateway's own default must keep reading
-  // "Hermes". Annotated active rows carry sourceScoped too, and keying this
+  // connection label — the active gateway's own default keeps its product name. Annotated active rows carry sourceScoped too, and keying this
   // off sourceScoped renamed the user's main agent to an IP-derived label
   // (community report, Aug 17 2026). A name its own backend reports is a real
   // name, never traded for a Desktop-side label.
@@ -43,18 +46,18 @@ export function displayName(bot: Partial<RosterRow>, meta?: BotMeta | null): str
   }
 
   if (meta?.title?.trim()) {
-    return meta.title.trim()
+    return brandDefaultName(meta.title.trim())
   }
 
   if (backendTitle) {
-    return backendTitle
+    return brandDefaultName(backendTitle)
   }
 
   // Core-profile display name (profile.yaml, set via `hermes profile rename
   // default <name>` or the dashboard) — the CLI-level equivalent of a Bot
   // Mode title. Rides the profiles.list row; presentation-only.
   if (typeof bot?.display_name === 'string' && bot.display_name.trim()) {
-    return bot.display_name.trim()
+    return brandDefaultName(bot.display_name.trim())
   }
 
   // An untitled backend row claimed by an alias reads as the alias name —
@@ -66,10 +69,10 @@ export function displayName(bot: Partial<RosterRow>, meta?: BotMeta | null): str
   }
 
   // The primary profile is literally named "default" — as a bot identity
-  // that reads like nobody bothered. Present it as Hermes (the agent it is)
+  // that reads like nobody bothered. Present it as TACT
   // unless the user gives it a real title.
-  if ((bot.name || '').trim().toLowerCase() === 'default' && !bot.title) {
-    return 'Hermes'
+  if (isDefault && !bot.title) {
+    return 'TACT'
   }
 
   const raw = (bot.title || bot.name || '').replace(/[-_]+/g, ' ').trim()
