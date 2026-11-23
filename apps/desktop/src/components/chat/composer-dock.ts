@@ -21,7 +21,7 @@ export const composerInputBacking = cn(
 /** The composer surface's hairline ring. Plugin composers (Bot Mode rooms) wear it too,
  *  so every input surface in the app reads as the same composer. */
 export const composerSurfaceRing =
-  'border border-[color-mix(in_srgb,var(--dt-composer-ring)_calc(18%*var(--composer-ring-strength)),var(--dt-input))]'
+  'border shadow-composer border-[color-mix(in_srgb,var(--dt-composer-ring)_calc(28%*var(--composer-ring-strength)),var(--dt-input))]'
 
 /** Backdrop treatment for non-input composer chrome. Harmless when the fill
  *  goes opaque (drawer open) — nothing shows through to blur. */

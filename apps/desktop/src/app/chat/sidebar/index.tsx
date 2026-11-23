@@ -7,6 +7,7 @@ import { useLocation } from 'react-router'
 
 import { PlatformAvatar } from '@/app/messaging/platform-icon'
 import { useSidebarDisplayScope } from '@/app/session/hooks/bot-mode-fetch-scope'
+import { BrandMark } from '@/components/brand-mark'
 import { Button } from '@/components/ui/button'
 import { Codicon } from '@/components/ui/codicon'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -1568,7 +1569,11 @@ export function ChatSidebar({
       <SidebarContent className="gap-0 overflow-hidden bg-transparent px-2.5">
         <SidebarGroup className="shrink-0 p-0 pb-2 pt-[calc(var(--titlebar-height)+0.375rem)]">
           <SidebarGroupContent>
-            <SidebarMenu className="gap-px">
+            <div className="mb-2 flex min-w-0 items-center gap-2.5 px-2 py-2">
+              <BrandMark className="size-7" />
+              <span className="truncate text-sm font-semibold tracking-tight">TACT</span>
+            </div>
+            <SidebarMenu className="gap-0.5">
               {navItems.map(item => {
                 const isInteractive = Boolean(item.action) || Boolean(item.route)
 
@@ -1593,7 +1598,9 @@ export function ChatSidebar({
                       // resolved region has been observed to swallow clicks on the
                       // top rows. Same carve-out as USER_BUBBLE_BASE_CLASS in
                       // thread.tsx.
-                      'flex h-7 w-full justify-start gap-2 rounded-md border border-transparent px-2 text-left text-[0.8125rem] font-medium text-(--ui-text-secondary) transition-colors duration-100 ease-out [-webkit-app-region:no-drag] hover:bg-(--ui-control-hover-background) hover:text-foreground hover:transition-none',
+                      'flex h-8 w-full justify-start gap-2.5 rounded-lg border border-transparent px-2.5 text-left text-[0.8125rem] font-medium text-(--ui-text-secondary) transition-colors duration-100 ease-out [-webkit-app-region:no-drag] hover:bg-(--ui-control-hover-background) hover:text-foreground hover:transition-none',
+                      isNewSession &&
+                        'mb-1 border-sidebar-border bg-card font-semibold text-card-foreground shadow-xs hover:bg-accent',
                       active &&
                         'border-(--ui-stroke-tertiary) bg-(--ui-control-active-background) text-foreground shadow-none hover:border-(--ui-stroke-tertiary)!',
                       !isInteractive &&

@@ -251,7 +251,7 @@ function FilesystemTab({
 
 export function RightSidebarSectionHeader({ children, className, ...props }: ComponentProps<'div'>) {
   return (
-    <div className={cn('group/project-header flex h-7 shrink-0 items-center px-2.5', className)} {...props}>
+    <div className={cn('group/project-header flex h-9 shrink-0 items-center border-b border-border/60 bg-card/60 px-3', className)} {...props}>
       {children}
     </div>
   )

@@ -441,7 +441,67 @@ export const slateTheme: DesktopTheme = {
   }
 }
 
+/** TACT's workspace palette. Graphite text, linen surfaces and copper focus accents. */
+export const tactTheme: DesktopTheme = {
+  name: 'tact',
+  label: 'TACT',
+  description: 'Linen and graphite with copper accents',
+  colors: {
+    ...THEME_PRESET_PALETTES.nous.colors,
+    background: '#fbfaf7',
+    foreground: '#282c2b',
+    card: '#ffffff',
+    cardForeground: '#282c2b',
+    muted: '#f1eee8',
+    mutedForeground: '#635f57',
+    popover: '#fffefa',
+    popoverForeground: '#282c2b',
+    primary: '#87502f',
+    primaryForeground: '#ffffff',
+    secondary: '#f0ece5',
+    secondaryForeground: '#343633',
+    accent: '#ede2d5',
+    accentForeground: '#443023',
+    border: '#ded8ce',
+    input: '#ded8ce',
+    ring: '#9b6241',
+    midground: '#87502f',
+    composerRing: '#9b6241',
+    sidebarBackground: '#f2eee7',
+    sidebarBorder: '#e2dbd0',
+    userBubble: '#f0e9dd',
+    userBubbleBorder: '#e0d6c7'
+  },
+  darkColors: {
+    ...THEME_PRESET_PALETTES.nous.darkColors,
+    background: '#1b1d1c',
+    foreground: '#f0ede6',
+    card: '#242725',
+    cardForeground: '#f0ede6',
+    muted: '#292c29',
+    mutedForeground: '#bab4a8',
+    popover: '#272a27',
+    popoverForeground: '#f0ede6',
+    primary: '#e2ac83',
+    primaryForeground: '#221810',
+    secondary: '#30332f',
+    secondaryForeground: '#ede7dd',
+    accent: '#48382d',
+    accentForeground: '#fae5d3',
+    border: '#3e413b',
+    input: '#464942',
+    ring: '#c88f68',
+    midground: '#e2ac83',
+    composerRing: '#c88f68',
+    sidebarBackground: '#212421',
+    sidebarBorder: '#373a35',
+    userBubble: '#2e302d',
+    userBubbleBorder: '#40433c'
+  }
+}
+
 export const BUILTIN_THEMES: Record<string, DesktopTheme> = {
+  tact: tactTheme,
   nous: nousTheme,
   github: githubTheme,
   catppuccin: catppuccinTheme,
@@ -459,7 +519,7 @@ export const BUILTIN_THEMES: Record<string, DesktopTheme> = {
 export const BUILTIN_THEME_LIST = Object.values(BUILTIN_THEMES)
 
 /** Skin used when nothing is persisted or the persisted name is retired. */
-export const DEFAULT_SKIN_NAME = 'nous'
+export const DEFAULT_SKIN_NAME = tactTheme.name
 
 /** Names that no longer resolve to a skin of their own. A stored pick of one
  *  falls back to DEFAULT_SKIN_NAME, and a cached backend theme under one is

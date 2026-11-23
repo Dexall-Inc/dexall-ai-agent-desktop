@@ -170,12 +170,11 @@ export function Intro({ personality, seed }: IntroProps) {
 
   return (
     <div className="pointer-events-none mx-auto w-full max-w-2xl px-3 py-4 sm:px-6" data-slot="aui_intro">
-      <div className="relative grid min-w-0 grid-cols-[4rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2 overflow-hidden rounded-2xl border border-border/80 bg-card px-4 py-5 shadow-sm sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-x-6 sm:p-6">
-        <div aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-[#a26b2f] dark:bg-[#e3a96a]" />
-        <BrandMark className="row-span-2 size-16 self-center sm:size-28" />
+      <div className="grid min-w-0 grid-cols-[3.5rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2 border-b border-border pb-6 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:gap-x-6 sm:pb-8">
+        <BrandMark className="row-span-2 size-14 self-center rounded-2xl bg-card p-1 ring-1 ring-border sm:size-[5.5rem]" />
         <h1
           aria-label="ALL AI5.2 TACT"
-          className="m-0 self-end text-left text-2xl leading-none font-semibold tracking-tight text-card-foreground sm:text-4xl"
+          className="m-0 self-end text-left text-3xl leading-none font-semibold tracking-tight text-foreground sm:text-5xl"
         >
           TACT <span className="ml-1 inline-block text-xs font-medium tracking-normal text-muted-foreground sm:text-sm">ALL AI5.2</span>
         </h1>
