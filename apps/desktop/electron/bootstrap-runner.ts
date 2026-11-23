@@ -48,7 +48,7 @@ const IS_WINDOWS = process.platform === 'win32'
 
 const STAMP_COMMIT_RE = /^[0-9a-f]{7,40}$/i
 const FALLBACK_COMMIT_RE = /^0{7,40}$/
-const FALLBACK_BRANCH = 'main'
+const FALLBACK_BRANCH = 'develop'
 
 function isPinnedCommit(commit) {
   return typeof commit === 'string' && STAMP_COMMIT_RE.test(commit) && !FALLBACK_COMMIT_RE.test(commit)
@@ -229,7 +229,7 @@ function downloadInstallScript(ref, destPath) {
   // install, the branch for an existing checkout or a non-git fallback stamp
   // (never the all-zero placeholder, which is not a real GitHub commit).
   const scriptName = installScriptName()
-  const url = `https://raw.githubusercontent.com/NousResearch/hermes-agent/${ref}/scripts/${scriptName}`
+  const url = `https://raw.githubusercontent.com/Dexall-Inc/dexall-ai-agent-desktop/${ref}/scripts/${scriptName}`
 
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.dirname(destPath), { recursive: true })

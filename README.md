@@ -39,7 +39,7 @@
 ### Linux、macOS、WSL2
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Dexall-Inc/dexall-ai-agent/develop/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Dexall-Inc/dexall-ai-agent-desktop/develop/scripts/install.sh | bash
 ```
 
 ### Windows（ネイティブ、PowerShell）
@@ -49,7 +49,7 @@ curl -fsSL https://raw.githubusercontent.com/Dexall-Inc/dexall-ai-agent/develop/
 PowerShell で実行:
 
 ```powershell
-iex (irm https://raw.githubusercontent.com/Dexall-Inc/dexall-ai-agent/develop/scripts/install.ps1)
+iex (irm https://raw.githubusercontent.com/Dexall-Inc/dexall-ai-agent-desktop/develop/scripts/install.ps1)
 ```
 
 ソースインストーラは Python 3.14、Node.js、npm、pnpm、ripgrep、FFmpeg、および Python 依存関係の導入を PM に委任します。Git が存在しない場合は、検証済みの Git for Windows アーカイブを Hermes のツールストアにステージングします。システムの Git を置き換えることはありません。別途の MSIX/App Installer パッケージとその更新所有権については、[インストール方法](https://hermes-agent.nousresearch.com/docs/getting-started/installation)を参照してください。

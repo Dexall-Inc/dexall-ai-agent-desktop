@@ -57,7 +57,7 @@ const channelRequest = channelBuildRequest()
 
 /** @typedef {import("app-builder-lib").Configuration} Configuration */
 
-const [owner, repo] = (process.env.GITHUB_REPOSITORY || 'Dexall-Inc/dexall-ai-agent').split('/')
+const [owner, repo] = (process.env.GITHUB_REPOSITORY || 'Dexall-Inc/dexall-ai-agent-desktop').split('/')
 if (!owner || !repo) {
   throw new Error(`invalid GITHUB_REPOSITORY ${process.env.GITHUB_REPOSITORY}`)
 }
@@ -157,8 +157,10 @@ module.exports = {
       ? [{ provider: 'generic', url: `${channelRequest.publicBase}/releases/darwin/stable/`, channel: 'stable' }]
       : channelRequest
       ? [{ provider: 'generic', url: `${channelRequest.publicBase}/releases/channel-builds/${channelRequest.buildId}/darwin/`, channel: 'latest' }]
-      : publicUrl && channel && macFeed
-      ? [{ provider: 'generic', url: `${publicUrl}/${macFeed.directory}/`, channel: macFeed.channel }]
+      : channel && macFeed
+      ? [publicUrl
+          ? { provider: 'generic', url: `${publicUrl}/${macFeed.directory}/`, channel: macFeed.channel }
+          : { provider: 'github', owner, repo, channel: macFeed.channel }]
       : null,
     category: 'public.app-category.developer-tools',
     extendInfo: {

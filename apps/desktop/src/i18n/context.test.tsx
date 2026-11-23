@@ -44,6 +44,21 @@ describe('I18nProvider', () => {
     expect(screen.getByTestId('label').textContent).toBe('Language')
   })
 
+  it('uses the product default while loading and when config has no language', async () => {
+    const configClient: I18nConfigClient = { getConfig: vi.fn().mockResolvedValue({}), saveConfig: vi.fn() }
+
+    render(
+      <I18nProvider configClient={configClient} defaultLocale="ja">
+        <LanguageProbe />
+      </I18nProvider>
+    )
+
+    expect(screen.getByTestId('locale').textContent).toBe('ja')
+    await waitFor(() => expect(screen.getByTestId('loading').textContent).toBe('false'))
+    expect(screen.getByTestId('label').textContent).toBe(TRANSLATIONS.ja.language.label)
+    expect(configClient.saveConfig).not.toHaveBeenCalled()
+  })
+
   it('normalizes an initial locale alias and switches translations', async () => {
     render(
       <I18nProvider configClient={null} initialLocale="zh-CN">

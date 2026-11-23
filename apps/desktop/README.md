@@ -1,59 +1,27 @@
-# Hermes Desktop ☤
+# Dexall ALL AI5.2 TACT Desktop
 
-<p align="center">
-  <a href="https://github.com/NousResearch/hermes-agent/releases"><img src="https://img.shields.io/badge/Download-macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-FFD700?style=for-the-badge" alt="Download"></a>
-  <a href="https://hermes-agent.nousresearch.com/docs/"><img src="https://img.shields.io/badge/Docs-hermes--agent.nousresearch.com-FFD700?style=for-the-badge" alt="Documentation"></a>
-  <a href="https://discord.gg/NousResearch"><img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://github.com/NousResearch/hermes-agent/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License: MIT"></a>
-</p>
+TACT のネイティブデスクトップアプリです。Nous Research の Hermes Desktop をベースに、Dexall がこのフォークの `develop` ブランチで保守しています。
 
-**The native desktop app for [Hermes Agent](../../README.md) — the self-improving AI agent from [Nous Research](https://nousresearch.com).** Same agent, same skills, same memory as the CLI and gateway, in a polished native window — chat with streaming tool output, side-by-side previews, a file browser, voice, and settings, no terminal required. Available for **macOS, Windows, and Linux**.
+- CLI とゲートウェイと同じエージェント、設定、スキル、メモリを利用できます。
+- ストリーミング応答とツール実行結果、ファイルやWebページの並列プレビュー、音声入力をサポートします。
+- Desktop の初期表示は日本語です。保存済みの言語設定が優先され、設定が未保存の場合は対応する OS の言語も利用します。
+- 設定画面から API プロバイダーとモデルを選べます。
 
-> **Intel Macs:** the `Hermes-Setup.dmg` bootstrap installer is built for
-> Apple Silicon (arm64) only, so on an Intel Mac it reports "not supported on
-> this Mac". No release builds a native `darwin-x64` bundle; install the
-> [CLI](../../README.md) and run `hermes desktop`. See
-> [Platform Support](../../website/docs/getting-started/platform-support.md#build-targets-and-support-priority).
+## インストールと起動
 
-<table>
-<tr><td><b>Chat with the full agent</b></td><td>Streaming responses, live tool activity, structured tool summaries, and the same conversation history as every other Hermes surface.</td></tr>
-<tr><td><b>Side-by-side previews</b></td><td>Render web pages, files, and tool outputs in a right-hand pane while you keep chatting.</td></tr>
-<tr><td><b>File browser</b></td><td>Explore and preview the working directory without leaving the app.</td></tr>
-<tr><td><b>Voice</b></td><td>Talk to Hermes and hear it back.</td></tr>
-<tr><td><b>Settings & onboarding</b></td><td>Manage providers, models, tools, and credentials from a real UI. First-run setup gets you to your first message in seconds.</td></tr>
-<tr><td><b>Stays current</b></td><td>Built-in updates pull the latest agent and rebuild the app in place.</td></tr>
-</table>
+[ルートのクイックインストール](../../README.md#クイックインストール)から TACT のランタイムをセットアップし、次を実行します。
 
----
-
-## Install
-
-### Install with Hermes (recommended)
-
-Already have the Hermes CLI? Just run:
-
-```bash
+```sh
 hermes desktop
 ```
 
-It builds and launches the GUI against your existing install — same config, keys, sessions, and skills. If Desktop cannot find a usable runtime or saved remote connection, first launch lets you connect to an existing Hermes gateway or install Hermes locally. Local onboarding then walks you through choosing a provider and model.
+既存のランタイムが見つからない場合は、オンボーディングからローカルに導入するか、既存のゲートウェイに接続できます。
 
-### Prebuilt installers
+## 更新
 
-Prebuilt installers are built and distributed via [the Hermes Desktop website.](https://hermes-agent.nousresearch.com/).
+ソース版は git の `origin` を参照します。このフォークから導入した場合の更新先は [Dexall の `develop`](https://github.com/Dexall-Inc/dexall-ai-agent-desktop/tree/develop) です。配布パッケージの公開状況は [GitHub Releases](https://github.com/Dexall-Inc/dexall-ai-agent-desktop/releases) を確認してください。
 
----
-
-## Updating
-
-Update through the owner of the installed artifact: Windows App Installer for
-sideload MSIX, Microsoft Store for Store packages, and `electron-updater` for
-macOS bundles. Source-built apps use the checkout update handoff.
-
-`hermes update` updates managed source checkouts; it does not rewrite a bundled
-payload. See [BUILDING.md](BUILDING.md) for package and release contracts.
-
----
+配布版の更新は macOS では Electron Updater、Windows のサイドロード版では App Installer、Store 版では Microsoft Store が処理します。パッケージのビルドと署名の詳細は [BUILDING.md](BUILDING.md) を参照してください。
 
 ## Screenshot shortcut (macOS)
 

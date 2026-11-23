@@ -9,9 +9,10 @@ import { syncBackendLocalePacks } from './backend-packs'
 import { I18nProvider } from './context'
 import { unregisterAppLocaleSource } from './registry'
 import { $requestedLocale } from './runtime'
+import type { Locale } from './types'
 
 /** Keep gateway/store imports outside the shared i18n context's import graph. */
-export function ProfileI18nProvider({ children }: { children: ReactNode }) {
+export function ProfileI18nProvider({ children, defaultLocale }: { children: ReactNode; defaultLocale?: Locale }) {
   const profile = useStore($activeGatewayProfile)
   const connection = useStore($connection)
 
@@ -27,7 +28,7 @@ export function ProfileI18nProvider({ children }: { children: ReactNode }) {
 
   useBackendLocalePacks(scopeKey)
 
-  return <I18nProvider scopeKey={scopeKey}>{children}</I18nProvider>
+  return <I18nProvider defaultLocale={defaultLocale} scopeKey={scopeKey}>{children}</I18nProvider>
 }
 
 /**

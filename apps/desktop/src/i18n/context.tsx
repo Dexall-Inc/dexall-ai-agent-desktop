@@ -91,6 +91,7 @@ export interface I18nProviderProps {
   children: ReactNode
   configClient?: I18nConfigClient | null
   initialLocale?: unknown
+  defaultLocale?: Locale
   /** Reconcile when the window's config owner changes, without remounting its children. */
   scopeKey?: string
 }
@@ -99,9 +100,10 @@ export function I18nProvider({
   children,
   configClient = defaultConfigClient,
   initialLocale,
+  defaultLocale = DEFAULT_LOCALE,
   scopeKey
 }: I18nProviderProps) {
-  const [locale, setLocaleState] = useState<Locale>(() => normalizeLocale(initialLocale))
+  const [locale, setLocaleState] = useState<Locale>(() => normalizeLocale(initialLocale ?? defaultLocale))
   const [isLoadingConfig, setIsLoadingConfig] = useState(false)
   const [isSavingLocale, setIsSavingLocale] = useState(false)
   const [configLoadError, setConfigLoadError] = useState<Error | null>(null)
@@ -162,7 +164,7 @@ export function I18nProvider({
     // The desktop races its own backend at startup: the renderer mounts before
     // the backend is ready, so the first /api/config call can time out. We keep
     // the established permanent-failure contract — a rejected config load
-    // settles on English so the UI stays usable — but bounded retries recover
+    // settles on the default locale so the UI stays usable — but bounded retries recover
     // transient startup failures, applying the persisted display.language once
     // the backend comes up.
     const MAX_LOCALE_RETRIES = 10
@@ -199,7 +201,7 @@ export function I18nProvider({
           const machineProfile = await window.hermesDesktop?.getMachineProfile?.().catch(() => null)
 
           if (!cancelled && !userLocaleRef.current) {
-            setLocaleState(resolveInitialLocale(requestedRef.current, machineProfile?.locale))
+            setLocaleState(resolveInitialLocale(requestedRef.current, machineProfile?.locale, defaultLocale))
           }
         })
         .catch(error => {
@@ -208,7 +210,7 @@ export function I18nProvider({
           }
 
           setConfigLoadError(toError(error))
-          setLocaleState(DEFAULT_LOCALE)
+          setLocaleState(defaultLocale)
 
           if (retryCount < MAX_LOCALE_RETRIES) {
             retryCount += 1
@@ -234,7 +236,7 @@ export function I18nProvider({
         clearTimeout(retryTimer)
       }
     }
-  }, [configClient, initialLocale, scopeKey])
+  }, [configClient, defaultLocale, initialLocale, scopeKey])
 
   const setLocale = useCallback(
     async (next: Locale) => {

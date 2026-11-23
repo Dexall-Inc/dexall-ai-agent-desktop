@@ -97,7 +97,7 @@ if (winParam === 'overlay') {
     <StrictMode>
       <RootErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <I18nProvider>
+          <I18nProvider defaultLocale="ja">
             <ThemeProvider>
               <HapticsProvider>
                 {/* ONE tooltip provider for the whole app. Every `Tip` used to

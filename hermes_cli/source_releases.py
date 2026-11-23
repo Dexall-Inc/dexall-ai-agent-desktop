@@ -15,7 +15,7 @@ from hermes_cli.update_channel import STABLE_TAG_RE, is_canary_tag
 logger = logging.getLogger(__name__)
 _PUBLIC_BASE = "https://hermes-assets.nousresearch.com"
 OFFICIAL_REPOSITORY = "NousResearch/hermes-agent"
-DEXALL_REPOSITORY = "Dexall-Inc/dexall-ai-agent"
+DEXALL_REPOSITORY = "Dexall-Inc/dexall-ai-agent-desktop"
 DEXALL_BRANCH = "develop"
 _GITHUB_ORIGIN = re.compile(
     r"^(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)"

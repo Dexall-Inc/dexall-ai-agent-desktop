@@ -20,12 +20,12 @@ set -u
 # hygiene can't break the locked sync the way it used to before pm owned it.
 export UV_NO_CONFIG=1
 
-REPO_URL="${HERMES_REPO_URL:-https://github.com/Dexall-Inc/dexall-ai-agent.git}"
+REPO_URL="${HERMES_REPO_URL:-https://github.com/Dexall-Inc/dexall-ai-agent-desktop.git}"
 default_source_branch() {
     local repo="${1%/}"
     repo="${repo%.git}"
     case "$repo" in
-        https://github.com/Dexall-Inc/dexall-ai-agent|git@github.com:Dexall-Inc/dexall-ai-agent|ssh://git@github.com/Dexall-Inc/dexall-ai-agent)
+        https://github.com/Dexall-Inc/dexall-ai-agent-desktop|git@github.com:Dexall-Inc/dexall-ai-agent-desktop|ssh://git@github.com/Dexall-Inc/dexall-ai-agent-desktop)
             printf '%s\n' develop ;;
         *) printf '%s\n' main ;;
     esac

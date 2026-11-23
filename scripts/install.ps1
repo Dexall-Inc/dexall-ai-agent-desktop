@@ -76,9 +76,9 @@ $script:BoundParams = $PSBoundParameters
 # Under iex, script scope is the caller's session and outlives a run; start
 # each run without the previous run's answer (see Set-LauncherUserPath).
 $script:BinDirOnCallerPath = $null
-$RepoUrl = if ($env:HERMES_REPO_URL) { $env:HERMES_REPO_URL } else { "https://github.com/Dexall-Inc/dexall-ai-agent.git" }
+$RepoUrl = if ($env:HERMES_REPO_URL) { $env:HERMES_REPO_URL } else { "https://github.com/Dexall-Inc/dexall-ai-agent-desktop.git" }
 function Get-DefaultSourceBranch([string]$Url) {
-    if ($Url -match '^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)Dexall-Inc/dexall-ai-agent(\.git)?/?$') {
+    if ($Url -match '^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)Dexall-Inc/dexall-ai-agent-desktop(\.git)?/?$') {
         return "develop"
     }
     return "main"

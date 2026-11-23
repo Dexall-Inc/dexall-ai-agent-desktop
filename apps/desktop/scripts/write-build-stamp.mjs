@@ -19,7 +19,7 @@ const STAMP_SCHEMA_VERSION = 1
 
 /** All-zero placeholder used when no real commit can be resolved. */
 export const FALLBACK_COMMIT = "0000000000000000000000000000000000000000"
-export const FALLBACK_BRANCH = "main"
+export const FALLBACK_BRANCH = "develop"
 
 const DESKTOP_ROOT = resolve(import.meta.dirname, "..")
 const REPO_ROOT = resolve(DESKTOP_ROOT, "..", "..")

@@ -397,7 +397,7 @@ def test_dexall_source_channel_tracks_develop_without_upstream_sync():
     from hermes_cli.update_cmd_git import _is_fork
 
     target = resolve_source_target("main")
-    assert target.repository == "Dexall-Inc/dexall-ai-agent"
+    assert target.repository == "Dexall-Inc/dexall-ai-agent-desktop"
     assert target.branch == "develop"
-    assert not _is_fork("git@github.com:Dexall-Inc/dexall-ai-agent.git")
+    assert not _is_fork("git@github.com:Dexall-Inc/dexall-ai-agent-desktop.git")
     assert resolve_source_target("main", repository="example/another-fork").branch == "main"

@@ -468,7 +468,7 @@ def test_source_admission_is_stamp_owned_not_path_owned(installation, mechanism)
 
 def test_embedded_revision_keeps_https_ref_advertisement_recovery(installation, monkeypatch):
     from hermes_cli.source_check import check_for_updates
-    _root, _linked, home, _base, head, responses, _requests, _git = installation
+    _root, _linked, home, _base, head, _responses, _requests, _git = installation
     monkeypatch.setenv("HERMES_REVISION", head)
     monkeypatch.setattr("hermes_cli.config.get_project_root", lambda: home)
     monkeypatch.setattr("hermes_cli.config.detect_install_method", lambda root: "nix")
@@ -483,7 +483,7 @@ def test_embedded_revision_keeps_https_ref_advertisement_recovery(installation, 
     assert check_for_updates(home=home)["behind"] == 0
     assert len(probes) == 1
     assert "ls-remote" in probes[0][0]
-    assert "https://github.com/Dexall-Inc/dexall-ai-agent.git" in probes[0][0]
+    assert "https://github.com/Dexall-Inc/dexall-ai-agent-desktop.git" in probes[0][0]
     assert probes[0][1]["owned"] is True
     assert probes[0][1]["env"]["GIT_TERMINAL_PROMPT"] == "0"
 
