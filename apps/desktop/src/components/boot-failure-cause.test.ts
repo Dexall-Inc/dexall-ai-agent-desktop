@@ -38,6 +38,13 @@ describe('local boot failure classification', () => {
     expect(copy.rawDetail).toBe(raw)
   })
 
+  it('shows the gateway diagnosis without the internal IPC method and CLI hint', () => {
+    const detail = 'Gateway inaccessible (runtime_exited). The gateway exited with status 75.'
+    const raw = `Error invoking remote method 'hermes:connection': Error: ${detail} Use hermes gateway status for recovery.`
+
+    expect(localBootFailureCopy(raw, CAUSES)).toEqual({ headline: CAUSES.exitedEarly, rawDetail: detail })
+  })
+
   it('falls back to the first raw line for an unknown failure, never a dump', () => {
     const copy = localBootFailureCopy('Something odd happened\nline 2\nline 3', CAUSES)
 

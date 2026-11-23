@@ -24,7 +24,16 @@ export const jaBoot = {
       gatewaySignInRequired: 'ゲートウェイへのサインインが必要です',
       ipcBridgeUnavailable: 'デスクトップ IPC ブリッジが利用できません。'
     },
+    causes: {
+      exitedEarly: 'TACT のゲートウェイが起動直後に停止しました。',
+      timedOut: 'TACT のゲートウェイから時間内に応答がありませんでした。',
+      permission: 'TACT のデータフォルダーに書き込めませんでした。',
+      diskFull: '空き容量が不足しているため、TACT を起動できませんでした。',
+      portInUse: 'TACT が使用するポートを別のプログラムが使用しています。',
+      installMissing: 'TACT のインストールに必要なファイルが見つかりません。「インストールを修復」を選択してください。'
+    },
     failure: {
+      details: '詳細',
       title: 'TACT を起動できませんでした',
       description:
         'バックグラウンドゲートウェイが起動しませんでした。以下の回復手順をお試しください。チャットや設定は削除されません。',

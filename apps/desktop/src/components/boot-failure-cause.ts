@@ -51,7 +51,11 @@ export function localBootFailureCopy(
   error: string | null | undefined,
   causes: Record<LocalBootCause, string>
 ): LocalBootFailureCopy {
-  const raw = String(error || '').trim()
+  const raw = String(error || '')
+    .trim()
+    .replace(/^Error invoking remote method 'hermes:[^']+': Error: /, '')
+    .replace(/ Use hermes gateway (?:status|restart) for recovery\.$/, '')
+
   const cause = classifyLocalBootFailure(raw)
 
   if (cause) {

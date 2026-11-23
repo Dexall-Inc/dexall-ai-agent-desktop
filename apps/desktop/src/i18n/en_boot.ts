@@ -34,17 +34,17 @@ export const enBoot = {
     // Plain causes for a local backend boot failure (`classifyBootFailure`);
     // the raw output stays behind "Show recent logs".
     causes: {
-      exitedEarly: "Hermes' background service stopped right after starting.",
-      timedOut: "Hermes' background service didn't answer in time.",
-      permission: "Hermes couldn't write to its data folder (permission problem).",
-      diskFull: 'The disk is full, so Hermes could not start.',
-      portInUse: 'Another program is using the network port Hermes needs.',
-      installMissing: "Part of Hermes' installation is missing. Choose Repair install to put it back."
+      exitedEarly: "TACT' background service stopped right after starting.",
+      timedOut: "TACT' background service didn't answer in time.",
+      permission: "TACT couldn't write to its data folder (permission problem).",
+      diskFull: 'The disk is full, so TACT could not start.',
+      portInUse: 'Another program is using the network port TACT needs.',
+      installMissing: "Part of TACT' installation is missing. Choose Repair install to put it back."
     },
     failure: {
-      title: "Hermes couldn't start",
+      title: "TACT couldn't start",
       description:
-        "Hermes' background service didn't come up. Try one of the recovery steps below. Nothing here deletes your chats or settings.",
+        "TACT' background service didn't come up. Try one of the recovery steps below. Nothing here deletes your chats or settings.",
       details: 'Details',
       remoteTitle: 'Remote gateway sign-in required',
       remoteDescription:
