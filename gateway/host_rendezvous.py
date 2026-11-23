@@ -725,12 +725,17 @@ def _cleanup_role(role: str) -> None:
         release_host_lock(role)
 
 
-def _handle_terminating_signal(signum, frame) -> None:
-    """Drop the record + token, then hand off to the handler we prepended to."""
-    import signal as _signal
-
+def cleanup_registered_roles() -> None:
+    """Release ownership after runtime shutdown, including before os._exit."""
     for role in tuple(_cleanup_roles):
         _cleanup_role(role)
+
+
+def _handle_terminating_signal(signum, frame) -> None:
+    """Drop the record + token, then hand off to the handler we prepended."""
+    import signal as _signal
+
+    cleanup_registered_roles()
     prev = _prev_signal_handlers.get(signum)
     if callable(prev):
         prev(signum, frame)

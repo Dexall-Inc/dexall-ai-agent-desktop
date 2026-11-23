@@ -5095,6 +5095,12 @@ def _exit_after_graceful_shutdown(exit_code: int) -> None:
         remove_pid_file()
         release_gateway_runtime_lock()
 
+    def _release_host_ownership() -> None:
+        # os._exit may leave an exiting process in the host's process table and
+        # its flock held. Release the host lease before asking the OS to exit.
+        from gateway.host_rendezvous import cleanup_registered_roles
+        cleanup_registered_roles()
+
     def _mark_exited() -> None:
         # Single funnel every graceful exit passes through, so the next boot's unclean-death detector
         # fires only for genuine SIGKILL/OOM/VM deaths. Ownership-guarded against an old --replace life.
@@ -5117,7 +5123,7 @@ def _exit_after_graceful_shutdown(exit_code: int) -> None:
         from hermes_logging import drain_log_queue
         drain_log_queue(timeout=1.0)
 
-    for _step in (_release_locks, _mark_exited, _flush_metrics, _write_cpu_profile, _drain_logs):
+    for _step in (_release_locks, _release_host_ownership, _mark_exited, _flush_metrics, _write_cpu_profile, _drain_logs):
         _best_effort(_step)
     os._exit(exit_code)
 

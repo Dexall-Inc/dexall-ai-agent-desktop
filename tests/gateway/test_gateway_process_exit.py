@@ -89,3 +89,20 @@ def test_exit_backstop_releases_pid_file_and_runtime_lock(monkeypatch):
     assert exc_info.value.code == 78
     remove_pid.assert_called_once_with()
     release_lock.assert_called_once_with()
+
+
+def test_exit_backstop_clears_host_rendezvous_before_os_exit(monkeypatch, tmp_path):
+    from gateway import host_rendezvous as hr
+
+    monkeypatch.setenv("HERMES_GATEWAY_LOCK_DIR", str(tmp_path / "locks"))
+    monkeypatch.setattr(hr, "_cleanup_roles", [hr.ROLE_GATEWAY])
+    monkeypatch.setattr(gateway_run.os, "_exit", _raise_exit)
+    assert hr.claim_host_lock(hr.ROLE_GATEWAY)[0] is hr.HostLockOutcome.ACQUIRED
+    try:
+        assert hr.publish_record(hr.ROLE_GATEWAY, home=str(tmp_path)) is not None
+        with pytest.raises(_ExitCalled):
+            gateway_run._exit_after_graceful_shutdown(0)
+        assert hr.read_record(hr.ROLE_GATEWAY, include_stale=True) is None
+        assert hr.host_lock_is_held(hr.ROLE_GATEWAY) is False
+    finally:
+        hr.release_host_lock(hr.ROLE_GATEWAY)
