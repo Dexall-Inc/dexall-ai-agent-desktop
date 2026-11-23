@@ -1,10 +1,10 @@
 import { useState } from 'react'
 
+import { BrandMark } from '@/components/brand-mark'
 import { useI18n } from '@/i18n'
 import { capitalize, normalize } from '@/lib/text'
 
 import introCopyJsonl from './intro-copy.jsonl?raw'
-import { Wordmark } from './wordmark'
 
 type IntroCopy = {
   headline: string
@@ -146,8 +146,6 @@ function pickCopy(copies: IntroCopy[], seed = 0): IntroCopy {
   return copies[Math.abs(seed) % copies.length] || FALLBACK_COPY[0]
 }
 
-const WORDMARK = 'ALL AI5.2 TACT'
-
 function resolveCopy(personality?: string, seed?: number): IntroCopy {
   const personalityKey = normalizeKey(personality)
 
@@ -171,14 +169,17 @@ export function Intro({ personality, seed }: IntroProps) {
   const body = bodies?.[Math.abs(rotationSeed) % bodies.length] ?? copy.body
 
   return (
-    <div
-      className="pointer-events-none flex w-full min-w-0 flex-col items-center justify-center px-0.5 py-6 text-center text-muted-foreground sm:px-6 lg:px-8"
-      data-slot="aui_intro"
-    >
-      <div className="w-full min-w-0">
-        <Wordmark className="mb-1" text={WORDMARK} />
-
-        <p className="m-0 text-center leading-normal tracking-tight">{body}</p>
+    <div className="pointer-events-none mx-auto w-full max-w-2xl px-3 py-4 sm:px-6" data-slot="aui_intro">
+      <div className="relative grid min-w-0 grid-cols-[4rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2 overflow-hidden rounded-2xl border border-border/80 bg-card px-4 py-5 shadow-sm sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-x-6 sm:p-6">
+        <div aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-[#a26b2f] dark:bg-[#e3a96a]" />
+        <BrandMark className="row-span-2 size-16 self-center sm:size-28" />
+        <h1
+          aria-label="ALL AI5.2 TACT"
+          className="m-0 self-end text-left text-2xl leading-none font-semibold tracking-tight text-card-foreground sm:text-4xl"
+        >
+          TACT <span className="ml-1 inline-block text-xs font-medium tracking-normal text-muted-foreground sm:text-sm">ALL AI5.2</span>
+        </h1>
+        <p className="m-0 self-start text-left text-xs leading-relaxed text-muted-foreground sm:text-sm">{body}</p>
       </div>
     </div>
   )

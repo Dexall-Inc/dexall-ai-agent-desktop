@@ -56,7 +56,7 @@ test.describe('dev-mode boot with mock backend', () => {
     // loaded → sessions loaded → boot overlay dismissed → composer visible.
     await waitForAppReady(fixture!, 120_000)
     await expect(fixture!.page.locator('html')).toHaveAttribute('lang', 'ja')
-    await expect(fixture!.page.locator('[data-slot=aui_intro] [aria-label="ALL AI5.2 TACT"]')).toBeVisible()
+    await expect(fixture!.page.getByRole('heading', { name: 'ALL AI5.2 TACT', exact: true })).toBeVisible()
   })
 
   test('screenshot after boot', async () => {

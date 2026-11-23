@@ -1,48 +1,30 @@
-import { type CSSProperties } from 'react'
-
-import { HackeryButton } from '../components/hackery-button'
+import { BrandMark } from '../components/brand-mark'
 import { startInstall } from '../store'
 
-/*
- * Welcome screen.
- *
- * Mirrors the desktop's chat intro (apps/desktop/src/components/chat/intro.tsx):
- *   - ALL AI5.2 TACT wordmark rendered in Collapse Bold, uppercase, tracked
- *   - mix-blend-plus-lighter so the type "glows" on the canvas
- *   - fit-text utility so the wordmark sizes itself to the column
- *
- * No install-path footer. The default install location is correct for
- * 99% of users; the rest will use the CLI installer with a -HermesHome
- * flag. Showing %LOCALAPPDATA% to grandma is developer-brain.
- */
 export default function Welcome() {
   return (
-    <div className="hermes-fade-in flex h-full flex-col items-center justify-center gap-10 px-12 py-10">
-      {/* Hero — same recipe the desktop's chat/intro.tsx uses */}
-      <div className="w-full max-w-2xl min-w-0 text-center">
-        <p
-          className="fit-text mx-auto mb-4 w-full font-['Collapse'] font-bold uppercase leading-[0.9] tracking-[0.08em] text-midground mix-blend-plus-lighter dark:text-foreground/90"
-          style={
-            {
-              '--fit-text-line-height': '0.9',
-              '--fit-text-max': '6rem',
-              '--fit-text-min': '2.5rem'
-            } as CSSProperties
-          }
-        >
-          <span>
-            <span>ALL AI5.2 TACT</span>
-          </span>
-          <span aria-hidden="true">ALL AI5.2 TACT</span>
-        </p>
-
-        <p className="m-0 text-center text-base leading-normal tracking-tight text-muted-foreground">
-          The agent that grows with you. We&rsquo;ll set things up in the
-          background &mdash; takes a few minutes.
-        </p>
+    <main className="hermes-fade-in flex h-full items-center justify-center overflow-y-auto px-6 py-6" lang="ja">
+      <div className="grid w-full max-w-[42rem] items-center gap-6 overflow-hidden rounded-2xl border border-white/10 bg-[#101a2c] p-6 text-white shadow-2xl sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] sm:p-8">
+        <div className="flex justify-center rounded-xl bg-[#e9dfce] p-3 sm:p-4">
+          <BrandMark className="size-28 sm:size-full sm:aspect-square" />
+        </div>
+        <div className="min-w-0">
+          <h1 aria-label="ALL AI5.2 TACT" className="m-0 text-4xl leading-none font-semibold tracking-tight sm:text-5xl">
+            TACT
+            <span className="mt-2 block text-sm font-medium tracking-normal text-[#e3b67c]">ALL AI5.2</span>
+          </h1>
+          <p className="mt-4 mb-0 text-sm leading-relaxed text-white/75">
+            このコンピューターに TACT Desktop をセットアップします。インストールには数分かかります。
+          </p>
+          <button
+            className="mt-5 cursor-pointer rounded-lg bg-[#f5c58d] px-4 py-2.5 text-sm font-semibold text-[#101a2c] transition-colors hover:bg-[#ffddb4] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+            onClick={() => void startInstall()}
+            type="button"
+          >
+            インストール
+          </button>
+        </div>
       </div>
-
-      <HackeryButton label="Install" onClick={() => void startInstall()} />
-    </div>
+    </main>
   )
 }
