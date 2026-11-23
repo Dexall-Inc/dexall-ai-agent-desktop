@@ -6,7 +6,7 @@ import { HackeryButton } from '../components/hackery-button'
 import { launchHermesDesktop } from '../store'
 
 /*
- * Success screen. HERMES AGENT wordmark stays as the visual anchor
+ * Success screen. ALL AI5.2 TACT wordmark stays as the visual anchor
  * (same Collapse Bold treatment as Welcome + the desktop chat intro),
  * with a status line below.
  *
@@ -48,9 +48,9 @@ export default function Success() {
           }
         >
           <span>
-            <span>Hermes is ready</span>
+            <span>TACT is ready</span>
           </span>
-          <span aria-hidden="true">Hermes is ready</span>
+          <span aria-hidden="true">TACT is ready</span>
         </p>
 
         <p className="m-0 text-center text-base leading-normal tracking-tight text-muted-foreground">
