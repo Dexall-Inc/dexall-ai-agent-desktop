@@ -1,3 +1,8 @@
+import {
+  type MockBackendFixture,
+  setupMockBackend,
+  waitForAppReady,
+} from './fixtures'
 /**
  * E2E smoke tests for the dev-mode desktop app.
  *
@@ -12,12 +17,6 @@
  *   pnpm exec playwright test e2e/boot.spec.ts --reporter=list
  */
 import { expect, test } from './test'
-
-import {
-  type MockBackendFixture,
-  setupMockBackend,
-  waitForAppReady,
-} from './fixtures'
 import { expectVisualSnapshot } from './visual-snapshot'
 
 let fixture: MockBackendFixture | null = null
@@ -56,6 +55,7 @@ test.describe('dev-mode boot with mock backend', () => {
     // electron starts → hermes serve is spawned → WS connects → config
     // loaded → sessions loaded → boot overlay dismissed → composer visible.
     await waitForAppReady(fixture!, 120_000)
+    await expect(fixture!.page.locator('html')).toHaveAttribute('lang', 'ja')
   })
 
   test('screenshot after boot', async () => {

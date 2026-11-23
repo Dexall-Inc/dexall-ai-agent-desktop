@@ -100,7 +100,7 @@ export function I18nProvider({
   children,
   configClient = defaultConfigClient,
   initialLocale,
-  defaultLocale = DEFAULT_LOCALE,
+  defaultLocale,
   scopeKey
 }: I18nProviderProps) {
   const [locale, setLocaleState] = useState<Locale>(() => normalizeLocale(initialLocale ?? defaultLocale))
@@ -188,9 +188,11 @@ export function I18nProvider({
           requestedRef.current = typeof saved === 'string' && saved.trim() ? normalizeLocaleId(saved) : null
           $requestedLocale.set(requestedRef.current)
 
-          // A saved choice needs no machine probe and always takes precedence.
-          if (isSupportedLocaleValue(saved)) {
-            setLocaleState(normalizeLocale(saved))
+          // A saved choice comes first, followed by the app's configured default.
+          const configuredLocale = isSupportedLocaleValue(saved) ? normalizeLocale(saved) : defaultLocale
+
+          if (configuredLocale) {
+            setLocaleState(configuredLocale)
 
             return
           }
@@ -201,7 +203,7 @@ export function I18nProvider({
           const machineProfile = await window.hermesDesktop?.getMachineProfile?.().catch(() => null)
 
           if (!cancelled && !userLocaleRef.current) {
-            setLocaleState(resolveInitialLocale(requestedRef.current, machineProfile?.locale, defaultLocale))
+            setLocaleState(resolveInitialLocale(requestedRef.current, machineProfile?.locale))
           }
         })
         .catch(error => {
@@ -210,7 +212,7 @@ export function I18nProvider({
           }
 
           setConfigLoadError(toError(error))
-          setLocaleState(defaultLocale)
+          setLocaleState(defaultLocale ?? DEFAULT_LOCALE)
 
           if (retryCount < MAX_LOCALE_RETRIES) {
             retryCount += 1

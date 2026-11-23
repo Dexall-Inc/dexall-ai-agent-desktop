@@ -7,15 +7,15 @@ export const jaBoot = {
     desktopBootFailedWithMessage: message => `デスクトップの起動に失敗しました: ${message}`,
     steps: {
       connectingGateway: 'ライブデスクトップゲートウェイに接続中',
-      loadingSettings: 'Hermes の設定を読み込み中',
+      loadingSettings: 'TACT の設定を読み込み中',
       loadingSessions: '最近のセッションを読み込み中',
-      retryingRemoteBackend: 'リモート Hermes バックエンドに再接続中…',
+      retryingRemoteBackend: 'リモート TACT バックエンドに再接続中…',
       startingDesktopConnection: 'デスクトップ接続を開始中',
       startingHermesDesktop: 'ALL AI5.2 TACT Desktop を起動中…'
     },
     errors: {
-      backgroundExited: 'Hermes バックグラウンドプロセスが終了しました。',
-      backgroundExitedDuringStartup: '起動中に Hermes バックグラウンドプロセスが終了しました。',
+      backgroundExited: 'TACT バックグラウンドプロセスが終了しました。',
+      backgroundExitedDuringStartup: '起動中に TACT バックグラウンドプロセスが終了しました。',
       backendStopped: 'バックエンドが停止しました',
       desktopBootFailed: 'デスクトップの起動に失敗しました',
       gatewayConnectionLost: 'ゲートウェイへの接続が切断されました',
@@ -25,7 +25,7 @@ export const jaBoot = {
       ipcBridgeUnavailable: 'デスクトップ IPC ブリッジが利用できません。'
     },
     failure: {
-      title: 'Hermes を起動できませんでした',
+      title: 'TACT を起動できませんでした',
       description:
         'バックグラウンドゲートウェイが起動しませんでした。以下の回復手順をお試しください。チャットや設定は削除されません。',
       remoteTitle: 'リモートゲートウェイへのサインインが必要です',
