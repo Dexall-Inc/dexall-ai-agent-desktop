@@ -343,7 +343,7 @@ def test_discovery_allows_restart_when_the_runtime_owner_is_exiting(tmp_path, mo
     def should_not_query(*_args, **_kwargs):
         pytest.fail("the exiting gateway's socket cannot answer")
 
-    monkeypatch.setattr(discovery, "runtime_owner_is_exiting", lambda home: home == tmp_path)
+    monkeypatch.setattr(discovery, "runtime_owner_is_exiting", lambda home: home == tmp_path.resolve())
     monkeypatch.setattr(discovery, "query_identify", should_not_query)
 
     assert runtime.discover_gateway_endpoint(tmp_path).state == "absent"

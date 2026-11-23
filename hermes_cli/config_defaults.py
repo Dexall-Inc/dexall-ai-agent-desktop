@@ -268,6 +268,7 @@ DEFAULT_CONFIG = {
         # Model name (any reasonable spelling) -> effort level; overrides agent.reasoning_effort
         # when the current model matches. Edit in config.yaml (no CLI support: dots in keys).
         "reasoning_overrides": {},
+        "reasoning_effort": "high",
         # Stored reasoning is replayed to every provider that can read it by default. This flag
         # only adds the must-echo " " pad on reasoning-less tool-call turns, which DeepSeek,
         # Kimi/Moonshot and Xiaomi MiMo require (auto-detected by provider name/host). Set
@@ -802,7 +803,7 @@ DEFAULT_CONFIG = {
 
     "display": {
         "compact": False,
-        "personality": "",
+        "personality": "teacher",
         "resume_display": "full",
         # Recap tuning for /resume and startup resume.
         "resume_exchanges": 10,            # max user+assistant pairs to show
@@ -1318,7 +1319,7 @@ DEFAULT_CONFIG = {
         # waiting on a multi-minute completion) restarts the window; a frozen one is caught.
         "child_timeout_seconds": 0,
         # Subagent effort: "ultra" | "max" | "xhigh" | "high" | "medium" | "low" | "minimal" | "none" (empty = inherit)
-        "reasoning_effort": "",
+        "reasoning_effort": "high",
         # Max parallel children per batch AND concurrent background units (async beyond it runs sync). Floor 1.
         "max_concurrent_children": 10,
         "prefix_stagger_seconds": 0,  # max s siblings wait for the 1st child's 1st chunk (not a stagger); 0 = off

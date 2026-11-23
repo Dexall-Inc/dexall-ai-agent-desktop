@@ -480,6 +480,7 @@ export const jaOverrides = {
       appearance: '外観',
       workspace: 'ワークスペース',
       safety: '安全性',
+      browser: 'ブラウザー',
       memory: 'メモリとコンテキスト',
       voice: '音声',
       advanced: '詳細'
@@ -831,6 +832,7 @@ export const jaOverrides = {
       }
     }),
     fieldDescriptions: defineFieldCopy({
+      delegation: { reasoningEffort: 'サブエージェントがタスクを処理するときの推論の深さです。' },
       model: 'コンポーザーで別のモデルを選ばない限り、新しいチャットで使用されます。',
       modelContextLength: '0 のままにすると、選択したモデルから検出されたコンテキストウィンドウを使用します。',
       fallbackProviders: 'デフォルトモデルが失敗したときに試す provider:model 形式のバックアップです。',

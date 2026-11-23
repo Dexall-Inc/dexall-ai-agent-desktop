@@ -103,6 +103,34 @@ interface ConfigSettingsProps {
   importInputRef: React.RefObject<HTMLInputElement | null>
 }
 
+const JA_PERSONALITY_LABELS: Record<string, string> = {
+  helpful: '親しみやすい',
+  concise: '簡潔',
+  technical: '技術解説',
+  creative: '創造的',
+  teacher: '丁寧な解説',
+  kawaii: 'かわいい',
+  catgirl: '猫耳アシスタント',
+  pirate: '海賊',
+  shakespeare: 'シェイクスピア風',
+  surfer: 'サーファー風',
+  noir: '探偵風',
+  uwu: 'ゆるふわ',
+  philosopher: '哲学者風',
+  hype: '元気いっぱい'
+}
+
+const JA_REASONING_LABELS: Record<string, string> = {
+  none: 'オフ',
+  minimal: '最小',
+  low: '低',
+  medium: '中',
+  high: '高',
+  xhigh: '非常に高い',
+  max: '最大',
+  ultra: '最高'
+}
+
 function ConfigSettingsInner({
   activeSectionId,
   subpage,
@@ -111,7 +139,7 @@ function ConfigSettingsInner({
   importInputRef,
   scopeProfile
 }: ConfigSettingsProps & { scopeProfile: string | undefined }) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const c = t.settings.config
   const keepAwakeMode = useStore($keepAwakeMode)
 
@@ -574,7 +602,11 @@ function ConfigSettingsInner({
                       : enumOptionsFor(key, getNested(config, key), config)
                   }
                   onChange={value => updateConfig(setConfigField(config, key, value))}
-                  optionLabels={key === 'tts.elevenlabs.voice_id' ? elevenLabsVoiceLabels : undefined}
+                  optionLabels={
+                    key === 'tts.elevenlabs.voice_id' ? elevenLabsVoiceLabels :
+                    locale === 'ja' && key === 'display.personality' ? JA_PERSONALITY_LABELS :
+                    locale === 'ja' && key === 'delegation.reasoning_effort' ? JA_REASONING_LABELS : undefined
+                  }
                   schema={field}
                   schemaKey={key}
                   value={configFieldValue(config, key)}

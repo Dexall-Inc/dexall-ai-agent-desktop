@@ -215,7 +215,7 @@ import type { RosterProfileMetadata } from './connection-registry'
 import { forgetRemovedGlobalRoute, registerGlobalRoute, removeSavedConnection } from './connection-registry-remove'
 import { buildRemoteBlock } from './connection-remote-block'
 import { liveWindowState, overlayWindowState } from './connection-window-state'
-import { describeCrashReason, installCrashForensics } from './crash-forensics'
+import { describeCrashReason, installCrashForensics, isExpectedTransition } from './crash-forensics'
 import { adoptServedDashboardToken } from './dashboard-token'
 import { resolveDesktopUserData } from './data-paths'
 import { extractDeepLink, handleLaunchDeepLink, registerDeepLinkProtocol as registerDeepLinkProtocolWith } from './deep-link-protocol'
@@ -11405,7 +11405,7 @@ async function startHermes(requestedProfile?: string, inheritsPrimary = false) {
   // E2E: simulate a boot failure without breaking the real backend. The boot
   // progresses a few steps, then fails with the given error message.
   if (BOOT_FAKE_ERROR) {
-    await advanceBootProgress('backend.resolve', 'Resolving Hermes backend', 8)
+    await advanceBootProgress('backend.resolve', 'Resolving TACT backend', 8)
     const error = new Error(BOOT_FAKE_ERROR) as any
     error.isBootstrapFailure = true
     bootstrapFailure = error
@@ -11474,7 +11474,7 @@ async function startHermes(requestedProfile?: string, inheritsPrimary = false) {
         windowState: getWindowState
       })
 
-    await advanceBootProgress('backend.resolve', 'Resolving Hermes backend', 8)
+    await advanceBootProgress('backend.resolve', 'Resolving TACT backend', 8)
     // Resolve for the desktop's primary profile so a per-profile remote
     // override on the active profile is honored (falls back to env / global).
 
@@ -11514,7 +11514,7 @@ async function startHermes(requestedProfile?: string, inheritsPrimary = false) {
       ensureLocalRuntime: backend =>
         ensureRuntime(backend, () => backendConnectionState.assertCurrentAttempt(connectionAttempt)),
       prepareLocalBackend: async () => {
-        await advanceBootProgress('backend.runtime', 'Resolving Hermes runtime', 28)
+        await advanceBootProgress('backend.runtime', 'Resolving TACT runtime', 28)
 
         return resolveHermesBackend(backendArgs, advanceBootProgress)
       },
@@ -11571,8 +11571,8 @@ async function startHermes(requestedProfile?: string, inheritsPrimary = false) {
     backendConnectionState.assertCurrentAttempt(connectionAttempt)
 
     backendStartFailure = null
-    rememberLog('[backend] Hermes gateway is ready')
-    updateBootProgress({ phase: 'backend.ready', message: 'Hermes gateway is ready', progress: 94, running: true, error: null })
+    rememberLog('[backend] TACT gateway is ready')
+    updateBootProgress({ phase: 'backend.ready', message: 'TACT gateway is ready', progress: 94, running: true, error: null })
     bootstrapRepairAttempt = 0
 
     // The primary descriptor names its own profile: a profile-less descriptor
@@ -15743,7 +15743,7 @@ function formatApiRequestFailure(
   const path = String(request?.path ?? '(no path)').slice(0, 500)
   const detail = error instanceof Error ? (error.stack ?? error.message) : String(error)
 
-  return `[hermes:api ${method} ${path}] ${detail}`.slice(0, 6000)
+  return `[tact:api ${method} ${path}] ${detail}`.slice(0, 6000)
 }
 
 ipcMain.handle('hermes:api', async (_event, request) => {
@@ -15796,7 +15796,10 @@ ipcMain.handle('hermes:api', async (_event, request) => {
 
     // Persist the failure (full stack) before the rejection crosses to the
     // renderer, where the invoke wrapper strips it to a one-line message.
-    rememberLog(formatApiRequestFailure(request, error))
+    if (!isExpectedTransition(error)) {
+      rememberLog(formatApiRequestFailure(request, error))
+    }
+
     flushDesktopLogBufferSync()
 
     throw error
