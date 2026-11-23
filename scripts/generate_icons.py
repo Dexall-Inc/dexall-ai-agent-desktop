@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Generate every app icon in the repo from the nous-girl art + platform backgrounds.
+"""Generate native TACT icons and shared web icons on platform backgrounds.
 
 Usage (from repo root):
     node scripts/generate-icons.mjs           # write
     node scripts/generate-icons.mjs --check   # verify structure
 
-Sources of truth — two axes, composed per target:
+Desktop and its bootstrap installer use assets/tact-desktop.png.
+Shared web icons use the original artwork described below.
   Girl art (vector):  assets/nous-girl-black.svg  (black positive space)
                       assets/nous-girl-white.svg  (white positive space)
                       straight from the Nous brand kit (Inkscape exports,
@@ -32,9 +33,8 @@ Sources of truth — two axes, composed per target:
 
 Desktop build identity comes from HERMES_PAYLOAD_TAG / HERMES_BUILD_COMMIT:
 Canary uses yellow/dark-yellow backgrounds. Commit builds use red/dark-red
-and a seven-character SHA badge. The girl and tile geometry do not change.
-Only apps/desktop outputs use this identity. Website, bootstrap, dashboard,
-and the shared master SVGs retain the default brand.
+and a seven-character SHA badge. The illustration and tile geometry stay fixed.
+Bootstrap uses the stable TACT artwork. Shared web assets keep their existing art.
 
 The girl's position and uniform scale are registered to the reference artwork.
 She is clipped only to the outer rounded silhouette. Only nodes near her bottom
@@ -93,6 +93,7 @@ Outputs (99 files):
 from __future__ import annotations
 
 import argparse
+import base64
 import io
 import json
 import math
@@ -253,8 +254,7 @@ TARGETS: list[tuple[str, str, object]] = [
     ("apps/desktop/assets/icon-dark.png", "png_dark", 1024),
     ("apps/desktop/assets/icon-dark.ico", "ico_dark", [16, 24, 32, 48, 64, 128, 256]),
     ("apps/desktop/assets/icon-dark.icns", "icns_dark", None),
-    # The DMG volume icon: our own drive artwork with the girl on its face,
-    # one artwork for light and dark (volume icons have no appearance variants).
+    # The mounted DMG uses the same TACT artwork in every build flavor.
     ("apps/desktop/packaging/dmg-volume.icns", "icns_from_png", "assets/dmg-volume.png"),
     ("apps/desktop/assets/icon.icon/icon.json", "icon_manifest", None),
     *([("apps/desktop/assets/icon.icon/Assets/border-light.png", "icon_border", "#000000"),
@@ -297,11 +297,12 @@ TARGETS: list[tuple[str, str, object]] = [
 class IconArt:
     """One generation's rendering inputs and caches; never writes to source."""
 
-    def __init__(self, source: Path, *, colors: tuple[str, str] | None = None, commit: str = ""):
+    def __init__(self, source: Path, *, colors: tuple[str, str] | None = None, commit: str = "", tact_mark: dict[str, str] | None = None):
         assets = source / "assets"
         self.source = source
         self.colors = colors
         self.commit = commit
+        self.tact_mark = tact_mark
         self.girls = {color: assets / f"nous-girl-{color}.svg" for color in ("black", "white")}
         self.backgrounds = assets / "backgrounds"
         self.paths: dict[str, str] = {}
@@ -458,9 +459,32 @@ def drag_bottom_nodes(path: ET.Element, *, cutoff: float, band: float, distance:
     path.set("d", " ".join(tokens))
 
 
+def tact_mark_data(source: Path) -> dict[str, str]:
+    # Extract the supplied monochrome ink to use the same illustration over
+    # the light, dark and release-flavor plates.
+    with Image.open(source / "assets/tact-desktop.png") as image:
+        luminance = image.convert("L")
+    alpha = luminance.point(lambda value: max(0, min(255, (250 - value) * 255 // 240)))
+    layers = {}
+    for ink in ("black", "white"):
+        mark = Image.new("RGBA", alpha.size, ink)
+        mark.putalpha(alpha)
+        buf = io.BytesIO()
+        save_png(mark, buf)
+        layers[ink] = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+    return layers
+
+
 def portrait_layer(art: IconArt, girl: str, bg: str, join_bottom: float) -> ET.Element:
     """The registered girl with her lowest nodes dragged down to `join_bottom`
     (the border's inner edge) so hair meets the ring instead of floating."""
+    if art.tact_mark:
+        x, y, size = (100, 100, 824) if "-mac-" in bg else (0, 0, 1024)
+        return ET.Element("image", {
+            "x": str(x), "y": str(y), "width": str(size), "height": str(size),
+            "{http://www.w3.org/1999/xlink}href": art.tact_mark[girl],
+        })
+
     box = GIRL_BOXES[bg]
     portrait = ET.fromstring(girl_layer(art, girl, box, align="xMidYMax"))
     _, y, portrait_width, portrait_height = box
@@ -503,11 +527,13 @@ def compose_svg(art: IconArt, girl: str, bg: str, *, badge: bool = True) -> str:
     portrait = portrait_layer(art, girl, bg, join_bottom)
     # The badge shares the portrait's clip so it can never paint past the plate.
     badge_svg = commit_layer(art.commit, bg) if art.commit and badge else ""
+    portrait_svg = ET.tostring(portrait, encoding="unicode")
+    layers = portrait_svg + badge_svg if art.tact_mark else badge_svg + portrait_svg
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}">\n'
         f'  <defs><clipPath id="icon-silhouette">{clip}</clipPath></defs>\n'
         f"  {inner.strip()}\n"
-        f'  <g clip-path="url(#icon-silhouette)">{badge_svg}{ET.tostring(portrait, encoding="unicode")}</g>\n'
+        f'  <g clip-path="url(#icon-silhouette)">{layers}</g>\n'
         "</svg>\n"
     )
 
@@ -631,17 +657,18 @@ def icon_border_svg(ink: str) -> str:
     )
 
 
-def icon_art_svg(art: IconArt, girl: str) -> str:
+def icon_art_svg(art: IconArt, girl: str, *, badge: bool = True) -> str:
     """Art layer: the girl registered as on the canvas-filling squircle, joined
     to the border band; the commit badge rides along for commit builds."""
     bg = "icon.icon"  # the plate is the canvas; the system supplies the grid
     join_bottom = ICON_CANVAS - ICON_CANVAS * BORDER_FRACTION + 10 if BORDER_ENABLED else ICON_CANVAS * (1 + EDGE_OVERSHOOT)
     portrait = portrait_layer(art, girl, bg, join_bottom)
-    badge = f"  {commit_layer(art.commit, bg)}\n" if art.commit else ""
+    badge_svg = commit_layer(art.commit, bg) if art.commit and badge else ""
+    portrait_svg = ET.tostring(portrait, encoding="unicode")
+    layers = portrait_svg + badge_svg if art.tact_mark else badge_svg + portrait_svg
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {ICON_CANVAS} {ICON_CANVAS}">\n'
-        f"{badge}"
-        f"  {ET.tostring(portrait, encoding='unicode')}\n"
+        f"  {layers}\n"
         "</svg>\n"
     )
 
@@ -672,6 +699,11 @@ def icon_mono_image(art: IconArt) -> Image.Image:
         layer = Image.new("RGBA", alpha.size, (grey, grey, grey, 0))
         layer.putalpha(alpha.point(lambda v: round(v * opacity)))
         return layer
+
+    if art.tact_mark:
+        svg = icon_art_svg(art, "white", badge=False)
+        alpha = coverage(svg)
+        return material(1.0, 1.0, alpha)
 
     out = Image.new("RGBA", (ICON_CANVAS, ICON_CANVAS), (0, 0, 0, 0))
     paints = [(coverage(icon_art_svg(art, "black")), MONO_INK), (coverage(icon_art_svg(art, "white")), (1.0, 1.0))]
@@ -832,10 +864,14 @@ def target_bytes(art: IconArt, kind: str, arg: object) -> bytes:
         img.save(buf, format="ICNS", append_images=frames[1:])
     elif kind == "icns_dark":
         img = render(art.master_mac_dark, 1024)
+        if art.tact_mark:
+            red, green, blue, _ = img.split()
+            if red.tobytes() == green.tobytes() == blue.tobytes():
+                img = img.convert("LA")
         frames = [img.resize((s, s), Image.LANCZOS) for s in (16, 32, 64, 128, 256, 512, 1024)]
         img.save(buf, format="ICNS", append_images=frames[1:])
     elif kind == "icns_from_png":
-        # Hand-made artwork (the DMG volume: girl on a drive) shipped as ICNS.
+        # The mounted installer volume uses the stable TACT artwork.
         img = Image.open(art.source / arg).convert("RGBA")
         assert img.size == (1024, 1024), f"{arg} must be 1024x1024"
         frames = [img.resize((s, s), Image.LANCZOS) for s in (16, 32, 64, 128, 256, 512, 1024)]
@@ -854,9 +890,11 @@ def target_bytes(art: IconArt, kind: str, arg: object) -> bytes:
     return buf.getvalue()
 
 
-def build_art(source: Path) -> tuple[IconArt, IconArt]:
+def build_art(source: Path) -> tuple[IconArt, IconArt, IconArt]:
     """Only desktop outputs carry build identity. Shared branding stays stable."""
     art = IconArt(source)
+    mark = tact_mark_data(source)
+    stable = IconArt(source, colors=("#ffffff", "#111111"), tact_mark=mark)
     tag = os.environ.get("HERMES_PAYLOAD_TAG", "")
     commit = os.environ.get("HERMES_BUILD_COMMIT", "")
     if commit:
@@ -864,22 +902,30 @@ def build_art(source: Path) -> tuple[IconArt, IconArt]:
             raise ValueError("Commit builds cannot also select HERMES_PAYLOAD_TAG")
         if not re.fullmatch(r"[a-f0-9]{40}", commit):
             raise ValueError("HERMES_BUILD_COMMIT requires an exact full 40-character SHA")
-        return art, IconArt(source, colors=("#e34850", "#4a1117"), commit=commit)
+        return art, stable, IconArt(source, colors=("#e34850", "#4a1117"), commit=commit, tact_mark=mark)
     if _CANARY_TAG_RE.match(tag.strip()):
-        return art, IconArt(source, colors=("#f5cc32", "#443808"))
-    return art, art
+        return art, stable, IconArt(source, colors=("#f5cc32", "#443808"), tact_mark=mark)
+    return art, stable, stable
+
+
+def select_art(rel: str, shared: IconArt, stable: IconArt, desktop: IconArt) -> IconArt:
+    if rel.startswith("apps/desktop/"):
+        return desktop
+    if rel.startswith("apps/bootstrap-installer/"):
+        return stable
+    return shared
 
 
 def cmd_write(source: Path, out: Path) -> int:
     """Return failure when any target cannot be generated or verified."""
-    art, desktop_art = build_art(source)
+    art, stable, desktop_art = build_art(source)
     written = 0
     failures = 0
     for rel, kind, arg in TARGETS:
         path = out / rel
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            selected = desktop_art if rel.startswith("apps/desktop/") else art
+            selected = select_art(rel, art, stable, desktop_art)
             path.write_bytes(target_bytes(selected, kind, arg))
             written += 1
         except Exception as exc:
@@ -919,13 +965,13 @@ def cmd_check(source: Path, out: Path) -> int:
     """Structural verification: regenerate every target in memory and assert
     the invariants that actually matter (there are no committed bytes to
     byte-compare — outputs are generated on demand)."""
-    art, desktop_art = build_art(source)
+    art, stable, desktop_art = build_art(source)
     problems: list[str] = []
 
     # every target must generate without error
     for rel, kind, arg in TARGETS:
         try:
-            selected = desktop_art if rel.startswith("apps/desktop/") else art
+            selected = select_art(rel, art, stable, desktop_art)
             target_bytes(selected, kind, arg)
         except Exception as exc:
             problems.append(f"{rel}: REGENERATE FAILED ({exc})")

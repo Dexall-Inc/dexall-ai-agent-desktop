@@ -16,7 +16,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 LAYERED_ICON = "icon.icon"  # apps/desktop/assets/icon.icon: the macOS 26 Icon Composer package
-DMG_VOLUME = Path("apps/desktop/packaging/dmg-volume.icns")  # hand-made drive artwork, not a tile
+DMG_VOLUME = Path("apps/desktop/packaging/dmg-volume.icns")  # unflavored installer volume artwork
 
 # ``generate`` builds a fresh PM runtime environment, which provisions the locked toolchain.
 pytestmark = pytest.mark.allow_network
@@ -212,24 +212,14 @@ def test_commit_icons_are_red_and_print_only_the_actual_seven_digit_prefix(gener
         (2, 6, 10, 18, 31, 2, 2), (31, 16, 16, 30, 1, 1, 30),
         (14, 16, 16, 30, 17, 17, 14),
     )
-    # The portrait renders in front of the badge (her hair crosses its lower rows), so a
-    # cell is only judged where the stable icon shows no art at that spot; every glyph
-    # must still be identified by a majority of its uncovered cells.
     for name in ("icon.png", "icon-dark.png"):
         image = Image.open(first / "apps/desktop/assets" / name).convert("RGB")
-        unbadged = Image.open(stable / "apps/desktop/assets" / name).convert("RGB")
-        art = (0, 0, 0) if name == "icon.png" else (255, 255, 255)
         for digit, rows in enumerate(expected):
-            judged = 0
             for y, row in enumerate(rows):
                 for x in range(5):
                     point = (gx + (digit * 6 + x) * 16 + 8, gy + y * 16 + 8)
-                    if unbadged.getpixel(point) == art:
-                        continue
-                    judged += 1
                     pixel = image.getpixel(point)
                     assert (min(pixel) > 240) == bool(row & (1 << (4 - x))), (name, digit, x, y)
-            assert judged >= 18, (name, digit, judged)
     assert_unbranded_outputs(stable, first)
 
 
@@ -275,38 +265,27 @@ def manifest_fills(package):
 
 
 def test_layered_macos_icon_mono_layer_and_flavor_stays_in_the_fill(generate, monkeypatch):
-    """macOS 26 masks the layers itself. The girl is dragged past the plate edge
-    so the mask crops her (no gap below), the mono layer is one image of two
-    materials — near-black frosted ink and white — so nothing stacks, and build
-    flavors recolour the fill in icon.json only; the layers never change."""
+    """The system masks the TACT illustration and tints its visible ink."""
     module = load_generator(monkeypatch)
     stable = generate("v1.2.3") / "apps/desktop/assets" / LAYERED_ICON
     canary = generate("canary.20260911T010203Z-v1.2.3") / "apps/desktop/assets" / LAYERED_ICON
     commit = generate(commit="0123456" + "a" * 33) / "apps/desktop/assets" / LAYERED_ICON
 
     canvas = module.ICON_CANVAS
+    mono = Image.open(stable / "Assets" / "mono.png").convert("RGBA")
+    assert mono.size == (canvas, canvas)
+    assert {px[:3] for px in mono.getdata() if px[3] > 127} == {(255, 255, 255)}
     for name in ("art-light.png", "art-dark.png"):
         layer = Image.open(stable / "Assets" / name).convert("RGBA")
-        assert layer.size == (canvas, canvas)
-        bottom_row = layer.crop((0, canvas - 1, canvas, canvas)).getchannel("A").getbbox()
-        assert bottom_row is not None, f"{name}: the girl must reach the plate edge"
-    mono = Image.open(stable / "Assets" / "mono.png").convert("RGBA")
-    ink_tone = round(module.MONO_INK[0] * 255)
-    tones = {px[0] for px in mono.getdata() if px[3] > 127}
-    assert tones == {ink_tone, 255}, tones
-    light_art = Image.open(stable / "Assets" / "art-light.png").convert("RGBA")
-    dark_art = Image.open(stable / "Assets" / "art-dark.png").convert("RGBA")
-    for x, y in ((canvas // 2, canvas // 2), (canvas // 3, canvas // 3), (2 * canvas // 3, canvas // 2)):
-        px = mono.getpixel((x, y))
-        if dark_art.getpixel((x, y))[3] > 200:      # the girl's white parts stay white and opaque
-            assert px[:3] == (255, 255, 255) and px[3] == 255, (x, y, px)
-        elif light_art.getpixel((x, y))[3] > 200:   # her black parts become the frosted ink
-            assert px[0] == ink_tone and abs(px[3] - round(module.MONO_INK[1] * 255)) <= 1, (x, y, px)
+        alpha = layer.getchannel("A")
+        assert alpha.size == (canvas, canvas)
+        assert alpha.getextrema() == (0, 255)
+        assert alpha.tobytes() == mono.getchannel("A").tobytes()
 
     for name in ("art-light.png", "art-dark.png", "mono.png"):
         assert (stable / "Assets" / name).read_bytes() == (canary / "Assets" / name).read_bytes(), name
 
-    # The DMG volume icon is the hand-made drive artwork, shipped as a full ICNS
+    # The DMG volume uses the stable TACT artwork, shipped as a full ICNS
     # and never flavoured: an installer's disk looks the same for every channel.
     volume = stable.parents[3] / DMG_VOLUME
     for other in (canary, commit):

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.png" alt="Hermes Agent" width="100%">
+  <img src="apps/desktop/public/nous-girl.png" alt="Dexall ALL AI5.2 TACT" width="128">
 </p>
 
 # Dexall ALL AI5.2 TACT
