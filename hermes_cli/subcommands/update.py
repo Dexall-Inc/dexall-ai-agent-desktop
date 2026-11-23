@@ -9,74 +9,49 @@ def build_update_parser(subparsers, *, cmd_update: Callable) -> None:
     """Attach the ``update`` subcommand to ``subparsers``."""
     from hermes_cli.release_channels import validate_name
     update_parser = subparsers.add_parser(
-        "update", help="Update Hermes Agent to the latest version",
-        description="Pull the latest changes from git and reinstall dependencies")
+        "update", help="ALL AI5.2 TACT を更新する",
+        description="Git から変更を取得し、依存関係を再インストールします。")
     update_parser.add_argument(
         "--gateway", action="store_true", default=False,
-        help="Gateway mode: use file-based IPC for prompts instead of stdin (used internally by /update)",
+        help="ゲートウェイモード。標準入力の代わりにファイルベースの IPC で確認します（/update の内部用）。",
     )
     update_parser.add_argument(
         "--check", action="store_true", default=False,
-        help="Check whether an update is available without installing anything")
+        help="インストールせずに更新の有無を確認します。")
     update_parser.add_argument(
         "--plan", action="store_true", default=False,
-        help="Show the update plan and exit without changing anything: install "
-            "kind (git/docker/nix), every running Hermes service across all "
-            "profiles with its supervisor and running code version, and how "
-            "each will be restarted. Read-only; safe on a live fleet.")
+        help="更新計画を表示して終了します。インストール方式（git/docker/nix）、全プロファイルの稼働中サービス、その監視プロセス、稼働中のコードのバージョン、再起動方法が表示されます。変更は加えません。")
     update_parser.add_argument(
         "--list-venv-holders", action="store_true", default=False,
-        help="Print the processes the Windows venv-holder guard would refuse on as a JSON list "
-            "[{pid, exe, argv, kind}] and exit: 0 when the venv is free, 3 when holders are present. "
-            "Read-only; kind is gateway / backend (Desktop serve) / hermes:<subcommand> / python, so a "
-            "scheduled update can stop exactly those PIDs instead of looping. Always [] off Windows.")
+        help="Windows で venv を使用中のプロセスを JSON 配列 [{pid, exe, argv, kind}] で表示して終了します。使用中のプロセスがなければ 0、あれば 3 を返します。読み取り専用です。kind は gateway / backend（Desktop serve）/ hermes:<subcommand> / python です。Windows 以外では [] を返します。")
     update_parser.add_argument(
         "--no-backup", action="store_true", default=False,
-        help="Skip ALL pre-update backups for this run (both the quick state snapshot and the full zip; overrides updates.pre_update_backup)",
+        help="今回の更新前バックアップをすべて省略します。簡易スナップショットと完全な ZIP が対象です。updates.pre_update_backup より優先されます。",
     )
     update_parser.add_argument(
         "--backup", action="store_true", default=False,
-        help="Force a FULL pre-update backup (quick state snapshot + HERMES_HOME zip) for this run, regardless of updates.pre_update_backup",
+        help="updates.pre_update_backup の設定にかかわらず、簡易スナップショットと HERMES_HOME の ZIP を作成します。",
     )
     update_parser.add_argument(
         "--yes", "-y", action="store_true", default=False,
-        help="Run without blocking on prompts: accepts the config-migration and stash-restore prompts, skips the fork-upstream prompt without adding a remote. API-key entry is skipped; run 'hermes config migrate' separately for those.",
+        help="確認待ちを省略します。設定の移行と stash の復元を承認し、upstream リモートの追加と API キーの入力は省略します。キーの入力は hermes config migrate で行えます。",
     )
     update_parser.add_argument(
         "--keep-stash", action="store_true", default=False,
-        help="Do NOT re-apply local changes after the update. Uncommitted "
-            "changes are still stashed so the update can proceed, but they "
-            "stay parked in git stash instead of being restored onto the "
-            "updated code. Used by the desktop updater so local source edits "
-            "never silently ride along across updates.")
+        help="ローカル変更は更新前に stash に退避し、更新後も stash に残します。Desktop のアップデーターがローカルの編集を自動で適用しないために使います。")
     update_parser.add_argument(
         "--branch", default=None, metavar="NAME",
-        help="Update against this branch instead of the default (main). "
-            "If the local checkout is on a different branch, hermes will "
-            "switch to the requested branch first (auto-stashing any "
-            "uncommitted changes).")
+        help="指定したブランチから更新します。Dexall の既定の更新先は develop です。現在のブランチが異なる場合は、未コミットの変更を自動で stash してから切り替えます。")
     update_parser.add_argument(
         "--switch-branch", action="store_true", default=False,
-        help="With updates.parked_branch_strategy: update_in_place configured, "
-            "override it for this run: switch to the update target and update "
-            "THERE instead of merging the target into the checked-out branch. "
-            "The branch is left exactly as it was — no merge commit is written "
-            "into its history. Use on long-lived feature branches where an "
-            "update-driven merge commit would pollute the branch. No effect "
-            "under the default strategy (switch), which already switches. "
-            "Still refuses to touch a dirty tree.")
+        help="updates.parked_branch_strategy が update_in_place の場合に限り、今回は更新先ブランチへ切り替えて更新します。作業ブランチの履歴は維持されます。既定の switch では動作は変わりません。作業ツリーに変更がある場合は実行を拒否します。")
     update_parser.add_argument(
         "--force", action="store_true", default=False,
-        help="Linux/macOS: stop every gateway this update owns NOW instead of waiting for in-flight work "
-            "to finish: running turns are interrupted, background subagents and tool/background processes "
-            "are stopped (anything still alive after ~12s is killed), then the update runs and the gateways "
-            "restart on the new code. Choose it when starting the update; it cannot interrupt another update "
-            "that is already waiting. Windows: proceed when another hermes.exe is detected (the Windows "
-            "pause keeps its drain). Does NOT bypass the Windows venv-process guard (see --force-venv).",
+        help="Linux/macOS では処理中のターンを中断し、この更新が管理するゲートウェイと子プロセスを停止してから更新し、再起動します。約12秒で停止しないプロセスは強制終了します。既に待機中の更新には適用できません。Windows では別の hermes.exe があっても続行し、処理の終了は待ちます。venv の使用チェックは --force-venv で指定します。",
     )
     update_parser.add_argument(
         "--force-venv", action="store_true", default=False,
-        help="Windows: mutate the venv even while other processes are running from its interpreter (desktop backend, gateway, terminals). Those processes keep native .pyd files locked, so the dependency sync will likely fail partway and strand the install half-updated. Use only if you know the detected holders are false positives.",
+        help="Windows で Desktop バックエンド、ゲートウェイ、ターミナルなどが venv を使用中でも変更を試みます。.pyd がロックされていると更新に失敗する場合があるため、検出が誤りと確認できた場合に使用してください。",
     )
     update_parser.add_argument(
         "--set-channel",
@@ -84,12 +59,7 @@ def build_update_parser(subparsers, *, cmd_update: Callable) -> None:
         type=validate_name,
         metavar="CHANNEL",
         help=(
-            "Persist the update channel for THIS install (recorded per "
-            "install in config.yaml under update.installs). Names are resolved "
-            "from the release archive, not a built-in list. Official source "
-            "checkouts default to 'stable' (the latest published vX.Y.Z "
-            "release, exact commit); 'main' follows the source branch. "
-            "Package channels are baked into their identities."
+            "このインストールの更新チャンネルを config.yaml の update.installs に保存します。チャンネル名はリリースアーカイブで解決します。公式ソース版は既定で stable（公開済みの最新 vX.Y.Z のコミット）を参照します。main はソースブランチを追跡し、Dexall では develop を参照します。パッケージ版はパッケージの識別情報で決まります。"
         ),
     )
     update_parser.add_argument(
@@ -97,8 +67,7 @@ def build_update_parser(subparsers, *, cmd_update: Callable) -> None:
         action="store_true",
         default=False,
         help=(
-            "Print this install's id and path (the id keys its per-install "
-            "channel record in config.yaml) and exit."
+            "このインストールの ID とパスを表示して終了します。ID は config.yaml のチャンネル設定を識別します。"
         ),
     )
     update_parser.add_argument(
@@ -107,14 +76,11 @@ def build_update_parser(subparsers, *, cmd_update: Callable) -> None:
         type=validate_name,
         metavar="CHANNEL",
         help=(
-            "Track CHANNEL for this run only (transient override; "
-            "--set-channel persists). 'stable' and 'canary' select published "
-            "releases, 'main' the branch tip. Source installs only."
+            "今回だけ CHANNEL を使用します。保存するには --set-channel を使います。stable と canary は公開リリース、main は最新のブランチのコミットを参照します。ソース版専用です。"
         ),
     )
     update_parser.add_argument(
         "--no-gateway-restart", action="store_true", default=False,
-        help="Update code and dependencies but defer the fleet restart. Use for updates "
-             "running inside a gateway cgroup, then restart gateways separately.",
+        help="コードと依存関係を更新し、ゲートウェイの再起動は後回しにします。ゲートウェイの cgroup 内で更新し、その後に別途再起動する場合に使います。",
     )
     update_parser.set_defaults(func=cmd_update)

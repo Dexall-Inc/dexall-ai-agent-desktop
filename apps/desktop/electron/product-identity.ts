@@ -25,23 +25,32 @@ export const PRODUCT_IDENTITY: Readonly<ProductIdentity> =
 
 /** Pin before the first userData lookup and single-instance lock. Electron's
  * later display-name changes must not redirect an installed build's state.
- * Stable keeps its historical userData and runtime naming behavior.
+ * Stable variants retain their historical userData directory.
  */
 export function applyDesktopIdentity(
   app: {
-    getPath(name: 'appData'): string
+    getPath(name: 'appData' | 'userData'): string
     setPath(name: 'userData', value: string): void
     setName(name: string): void
   },
   identity: Readonly<ProductIdentity> = PRODUCT_IDENTITY
 ): string | null {
-  if (!identity.token && identity.appNamePascal === identity.artifactNamePascal) {
+  const stable = !identity.token && identity.appNamePascal === identity.artifactNamePascal
+  const currentUserData = stable ? app.getPath('userData') : ''
+
+  const userData = stable
+    ? path.basename(currentUserData) === identity.displayName
+      ? path.join(path.dirname(currentUserData), identity.windowsExecutableName)
+      : currentUserData
+    : path.join(app.getPath('appData'), identity.appNamePascal)
+
+  mkdirSync(userData, { recursive: true })
+  app.setPath('userData', userData)
+
+  if (stable) {
     return null
   }
 
-  const userData: string = path.join(app.getPath('appData'), identity.appNamePascal)
-  mkdirSync(userData, { recursive: true })
-  app.setPath('userData', userData)
   app.setName(identity.displayName)
 
   return identity.displayName

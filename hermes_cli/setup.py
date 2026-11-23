@@ -708,7 +708,7 @@ def _run_setup_wizard_impl(args):
     from hermes_cli.auth import get_active_provider
     is_existing = bool(get_env_value("OPENROUTER_API_KEY") or get_env_value("OPENAI_BASE_URL")
                        or get_active_provider() is not None or anon_auth.free_inference_active())
-    _print_banner("│             ☤ Hermes Agent Setup Wizard                │",
+    _print_banner("│          ✦ ALL AI5.2 TACT Setup Wizard                  │",
                   "├─────────────────────────────────────────────────────────┤",
                   "│  Let's configure your Hermes Agent installation.       │",
                   "│  Press Ctrl+C at any time to exit.                     │")

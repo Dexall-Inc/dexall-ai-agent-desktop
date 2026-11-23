@@ -76,8 +76,8 @@ gateway:
     next_turn_only: "    (次のターンのみ — 1 回応答した後に元へ戻ります)"
     switch_cancelled: "🟡 モデルの切り替えをキャンセルしました。現在のモデルは変わりません ({model})。"
     guard_confirm: "⚠️ **{title}**\n\n{message}\n\n_テキスト代替: 切り替えるには `{prefix}approve`、現在のモデルを維持するには `{prefix}cancel` と返信してください。_"
-    err_once_local: "`--once` is not available in this session; use `/model <name>` and switch back after the turn."
-    local_next_turn: "Applies from your next message."
+    err_once_local: "`--once` はこのセッションでは使えません。`/model <name>` でモデルを切り替え、ターンの終了後に元に戻してください。"
+    local_next_turn: "次のメッセージから適用されます。"
   agents:
     header: "🤖 **アクティブなエージェントとタスク**"
     active_agents: "**アクティブなエージェント:** {count}"
@@ -228,20 +228,20 @@ gateway:
     truncated_suffix: "… (切り詰めました; 完全な出力にはターミナルで `hermes kanban …` を使用してください)"
     no_output: "(出力なし)"
     wake:
-      completed: "completed"
-      gave_up: "gave up (retries exhausted)"
-      crashed: "crashed (worker exited); dispatcher will retry"
-      timed_out: "timed out; dispatcher will retry"
-      blocked: "blocked; needs attention"
-      review_requested: "handed off for review; the implementation is done"
-      changes_requested: "review requested changes (BLOCK); implementation is not approved"
-      block_loop_detected: "routed to triage after repeated blocks; orchestration attention needed"
-      status_default: "status changed"
+      completed: "完了しました"
+      gave_up: "再試行の上限に達しました"
+      crashed: "ワーカーが終了しました。ディスパッチャーが再試行します"
+      timed_out: "タイムアウトしました。ディスパッチャーが再試行します"
+      blocked: "ブロックされました。確認が必要です"
+      review_requested: "実装が完了し、レビューに引き渡されました"
+      changes_requested: "レビューで修正が求められました（BLOCK）。実装は未承認です"
+      block_loop_detected: "ブロックが繰り返されたためトリアージに移しました。進行状況を確認してください"
+      status_default: "状態が変わりました"
       status_joiner: ", "
-      message: "[kanban] Task {task_id} {status}.\nTitle: {title}\nAssignee: @{assignee}\nBoard: {board}\n\nCheck the result or decide the next step."
-      handoff: "Result: {summary}"
-      review_detail: "Review feedback: {reason}\nInspect the existing card and its current review run; return work to the same implementation task. Do not treat this BLOCK as approval and do not create a duplicate task."
-      guidance: "This is an automatic task-status notification, not a request to decompose the task again. Inspect the current board before creating follow-up tasks; do not recreate tasks or graphs that already exist."
+      message: "[kanban] タスク {task_id}: {status}。\nタイトル: {title}\n担当者: @{assignee}\nボード: {board}\n\n結果を確認するか、次の手順を決めてください。"
+      handoff: "結果: {summary}"
+      review_detail: "レビューの指摘: {reason}\n既存のカードと現在のレビューを確認し、同じ実装タスクに作業を戻してください。BLOCK は未承認です。重複するタスクを作成しないでください。"
+      guidance: "これはタスク状態の自動通知です。タスクを再分割する必要はありません。後続タスクを作成する前にボードを確認し、既存のタスクやグラフを重複して作成しないでください。"
     ping:
       completed: "✔ {head} 完了 — {title}{handoff}"
       review_requested: "👀 {head} レビュー待ち — {title}{handoff}"
@@ -341,11 +341,11 @@ gateway:
     restarting: "♻ ゲートウェイを再起動しています。60 秒以内に通知が届かない場合は、コンソールで `hermes gateway restart` を実行してください。"
   resume:
     db_unavailable: "セッションデータベースは利用できません。"
-    parse_error: "⚠️ Could not parse `/resume` arguments: {error}. Use quotes around titles with spaces, for example: `/resume \"Project A Plan\"`."
-    matrix_no_named_sessions: "No named sessions found for this Matrix room. Use `/title My Session` to name the current room session, `/resume --all` to list all Matrix sessions, or `/resume --cross-room <session name>` to explicitly cross room boundaries."
+    parse_error: "⚠️ `/resume` の引数を解析できませんでした: {error}。空白を含むタイトルは引用符で囲んでください。例: `/resume \"Project A Plan\"`."
+    matrix_no_named_sessions: "この Matrix ルームに名前付きセッションはありません。`/title My Session` で現在のセッションに名前を付けられます。`/resume --all` で全 Matrix セッションを表示し、`/resume --cross-room <session name>` で別のルームのセッションを明示的に再開できます。"
     matrix_blocked_no_origin: "⚠️ Matrix での /resume をブロックしました: この名前付きセッションには元のルームが記録されていないため、Hermes はデフォルトでは現在のルーム内で再開しません。意図的にルームの境界を越えて再開する場合は `/resume --cross-room {name}` を使用してください。"
     matrix_blocked_other_room: "⚠️ Matrix での /resume をブロックしました: そのセッションは別の Matrix ルーム ({room}) のものです。意図的にここで再開する場合は `/resume --cross-room {name}` を使用してください。"
-    matrix_cross_room_success: "⚠️ Cross-room resume: resumed **{title}** inside Matrix room **{room}**. Future messages in this room will use that transcript until `/reset` or another `/resume`.{msg_part}"
+    matrix_cross_room_success: "⚠️ ルームをまたいでセッション **{title}** を Matrix ルーム **{room}** で再開しました。このルームでは `/reset` または別の `/resume` を実行するまで、この会話履歴を使用します。{msg_part}"
     blocked_not_owner: "⚠️ /resume をブロックしました: '**{name}**' は別のユーザーまたはチャットのセッションです。再開できるのはこのチャットのセッションのみです。"
     no_named_sessions: "名前付きセッションが見つかりません。\n`/title セッション名` で現在のセッションに名前を付けると、後で `/resume セッション名` で戻れます。"
     all_requires_admin: "_注: `--all`（チャット横断の一覧）には設定済みの管理者権限が必要です。このチャットのセッションのみ表示しています。_"
@@ -543,7 +543,7 @@ gateway:
     timed_out: "❌ Hermes の更新は 30 分でタイムアウトしました。"
     finished_success: "✅ Hermes の更新が正常に完了しました。"
     last_lines: "{msg}\n\n最後の行:\n```\n{tail}\n```"
-    managed_action: "Hermes Agent の更新"
+    managed_action: "ALL AI5.2 TACT の更新"
     not_applicable: "✗ `hermes update` はこのインストール方法 ({method}) には適用できません。\n更新方法: {command}"
   usage:
     rate_limits: "⏱️ **レート制限:** {state}"
@@ -1503,13 +1503,13 @@ platform:
       size_downgraded: "{label}のサイズ {size_mb}MB が上限 {cap} を超えています。代わりにファイルとして送信しました。"
   email:
     image_line: "画像: {url}"
-    standalone_subject: "Hermes Agent"
+    standalone_subject: "ALL AI5.2 TACT"
   dingtalk:
     emotion:
       thinking: "🤔考え中"
       done: "🥳完了"
   irc:
-    quit_message: "Hermes Agent をシャットダウンしています"
+    quit_message: "ALL AI5.2 TACT をシャットダウンしています"
     standalone_quit: "配信済み"
   relay:
     confirm_approve_once: "一度だけ承認"
@@ -1533,7 +1533,7 @@ slash:
   sethome:
     description: "このチャットをホームチャンネルに設定"
   update:
-    description: "Hermes Agent を最新バージョンに更新"
+    description: "ALL AI5.2 TACT を最新バージョンに更新"
   category:
     session: "セッション"
     configuration: "設定"
@@ -1741,7 +1741,7 @@ slash:
   image:
     description: "次のプロンプト用にローカル画像ファイルを添付"
   version:
-    description: "Hermes Agent のバージョンを表示"
+    description: "ALL AI5.2 TACT のバージョンを表示"
   debug:
     description: "デバッグレポート（バージョン、設定キー名、エラー件数。ログ本文なし）: まずプライバシー通知を表示し、/debug upload でリンクを共有"
   quit:
@@ -2223,7 +2223,7 @@ cli:
     images_attached_one: "📎 画像 {count} 件を添付しました"
     images_attached_other: "📎 画像 {count} 件を添付しました"
     command_interrupted: "コマンドを中断しました。"
-    welcome: "Hermes Agent へようこそ！メッセージを入力するか、/help でコマンド一覧を表示します。"
+    welcome: "ALL AI5.2 TACT へようこそ！メッセージを入力するか、/help でコマンド一覧を表示します。"
     vscode_images_hint: "VS Code ではここで画像をフル解像度で表示できます。設定で terminal.integrated.enableImages をオンにしてください。"
     activated_skills_label: "有効化されたスキル:"
     redaction_disabled_title: "⚠  シークレットの秘匿化が無効です"
@@ -2304,7 +2304,7 @@ cli:
   render:
     response_transformed: "[ストリーミング後に応答が変換されました]"
     banner_tagline: "{name} - AI エージェントフレームワーク"
-    banner_version: "Hermes Agent v{version} ({date})"
+    banner_version: "ALL AI5.2 TACT v{version} ({date})"
   subagents:
     cannot_steer_process: "バックグラウンドプロセスはステアできません。停止するか、ログを確認してください。"
     count_live: "{count} 件稼働中"
@@ -2776,7 +2776,7 @@ cli:
       not_supported: "(._.) /fast は高速モードに対応したモデル（OpenAI Priority Processing または Anthropic Fast Mode）でのみ利用できます。"
       feature_generic: "高速モード"
       feature_anthropic: "Anthropic Fast Mode"
-      feature_openai: "Priority Processing"
+      feature_openai: "優先処理"
       feature_ultrafast: "OpenAI Ultrafast"
       ultrafast_not_supported: "(._.) このアカウントまたはルートでは {model} の Ultrafast は利用できません。"
       usage: "使い方: /fast [normal|fast|auto|cold|ultrafast|status] [--global]"
@@ -3182,12 +3182,12 @@ cli:
       usage: "/timestamps [on|off|status]"
       label: "メッセージのタイムスタンプ"
     update:
-      managed_action: "Hermes Agent を更新"
+      managed_action: "ALL AI5.2 TACT を更新"
       choice_update: "今すぐ更新"
-      choice_update_desc: "現在のセッションを終了して Hermes Agent を更新します"
+      choice_update_desc: "現在のセッションを終了して ALL AI5.2 TACT を更新します"
       choice_cancel: "キャンセル"
       choice_cancel_desc: "現在のセッションを維持します"
-      title: "☤  Hermes Agent を更新"
+      title: "☤  ALL AI5.2 TACT を更新"
       detail: "現在のセッションを終了し、`hermes update` を実行します。"
       cancelled: "🟡 /update をキャンセルしました。"
       launching: "☤ 更新を開始しています..."
@@ -3226,7 +3226,7 @@ cli:
     google_vertex_oauth: "Google OAuth (Vertex AI)"
     key_cmd_token: "key_cmd token (command)"
     minimax_oauth: "MiniMax OAuth"
-    token_provider: "Token provider"
+    token_provider: "トークンの取得元"
     api_key_not_set: "未設定！"
     value_not_set: "未設定"
     section_model: "モデル"

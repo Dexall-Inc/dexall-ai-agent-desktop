@@ -40,7 +40,7 @@ on:
         default: false
   pull_request:
   push:
-    branches: [main]
+    branches: [develop]
 
 permissions:
   contents: read
@@ -58,7 +58,7 @@ permissions:
 # ref as before.
 concurrency:
   group: ci-${{ inputs.release == true && github.run_id || (github.event_name == 'pull_request' && github.event.pull_request.number || github.ref) }}
-  cancel-in-progress: ${{ inputs.release != true && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/') && github.ref != 'refs/heads/main')) }}
+  cancel-in-progress: ${{ inputs.release != true && (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/heads/') && github.ref != 'refs/heads/develop')) }}
 
 jobs:
   # ─────────────────────────────────────────────────────────────────────
@@ -494,7 +494,7 @@ jobs:
           cat ci-timings-summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Save timing baseline (main only)
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/develop'
         continue-on-error: true
         run: |
           # Degraded runs (API rate-limited) produce no ci-timings.json —
@@ -506,7 +506,7 @@ jobs:
           fi
 
       - name: Upload timing baseline to cache (main only)
-        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && hashFiles('ci-timings-baseline.json') != ''
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/develop' && hashFiles('ci-timings-baseline.json') != ''
         continue-on-error: true
         timeout-minutes: 2
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

@@ -1,216 +1,91 @@
-# hermes_cli/ + cli.py — CLI, slash commands, config, skins, updater, profiles
+# hermes_cli/ + cli.py — CLI、スラッシュコマンド、設定、スキン、アップデーター、プロファイル
 
-Applies on top of the root `AGENTS.md`. Long-form: `website/docs/developer-guide/cli-internals.md`.
+ルートの `AGENTS.md` の上に適用されます。長形式: `website/docs/developer-guide/cli-internals.md`。
 
-## CLI architecture
+## CLIアーキテクチャ
 
-`cli.py` holds `HermesCLI` (REPL loop, config, slash dispatch); behaviour lives in mixins
-`hermes_cli/cli_commands_mixin.py`, `cli_stream_mixin.py`, `cli_status_bar_mixin.py`,
-`cli_billing_mixin.py`, `cli_tui_mixin.py` (widgets, keybindings, panels), `cli_tui_runtime_mixin.py`
-(run-loop phases: input dispatch, startup, signals, shutdown), `cli_init_mixin.py` (the `__init__`
-phases), ... Module-level helpers live in topical siblings that `cli.py` re-exports:
-`cli_config_load.py` (defaults + YAML merge, env mirroring), `cli_render.py` (ANSI/skin colours,
-light mode, markdown, `_cprint`, panel wrap), `cli_terminal_input.py` (file drops, paste/Enter-key
-sequences, CPR guards), `cli_shutdown.py` (exit watchdog, cleanup steps, one-shot finalize),
-`cli_single_query.py` (`-q` runner, exit codes, kanban loops), `cli_auto_maintenance.py` (state-db/checkpoint maintenance).
-Mutable module state (`_cleanup_done`, `_OUTPUT_HISTORY`,
-`_LIGHT_MODE_CACHE`, ...) and every `global`-writing function stay in `cli.py`. **Rich** renders banner/panels; **prompt_toolkit**
-handles input + autocomplete; `KawaiiSpinner` (`agent/display.py`) animates API calls and prints
-the `┊` activity feed. `load_cli_config()` in `cli.py` merges CLI defaults + user YAML.
+`cli.py` は `HermesCLI`（REPLループ、設定、スラッシュディスパッチ）を保持し、振る舞いはミックスイン
+`hermes_cli/cli_commands_mixin.py`、`cli_stream_mixin.py`、`cli_status_bar_mixin.py`、
+`cli_billing_mixin.py`、`cli_tui_mixin.py`（ウィジェット、キーバインディング、パネル）、`cli_tui_runtime_mixin.py`
+（実行ループのフェーズ: 入力ディスパッチ、起動、シグナル、シャットダウン）、`cli_init_mixin.py`（`__init__`
+フェーズ）にあります。... モジュールレベルのヘルパーは、`cli.py` が再エクスポートするトピック別の兄弟モジュールにあります:
+`cli_config_load.py`（デフォルト値 + YAMLマージ、環境変数ミラーリング）、`cli_render.py`（ANSI/スキン色、
+ライトモード、マークダウン、`_cprint`、パネル折り返し）、`cli_terminal_input.py`（ファイルドロップ、ペースト/Enterキー
+シーケンス、CPRガード）、`cli_shutdown.py`（終了ウォッチドッグ、クリーンアップ手順、一回限りのファイナライズ）、
+`cli_single_query.py`（`-q` ランナー、終了コード、かんばんループ）、`cli_auto_maintenance.py`（状態DB/チェックポイントの保守）。
+変更可能なモジュール状態（`_cleanup_done`、`_OUTPUT_HISTORY`、
+`_LIGHT_MODE_CACHE`、...）と `global` を書き込むすべての関数は `cli.py` に残ります。**Rich** はバナー/パネルを描画し、**prompt_toolkit**
+は入力とオートコンプリートを処理し、`KawaiiSpinner`（`agent/display.py`）はAPI呼び出しをアニメーション表示し、
+`┊` のアクティビティフィードを出力します。`load_cli_config()` は `cli.py` 内でCLIデフォルトとユーザーYAMLをマージします。
 
-`hermes_cli/gateway.py` is the `hermes gateway` facade (process discovery, PM-aware systemd unit
-generation/refresh, command dispatch); topical siblings re-exported by the facade include
-`gateway_launchd.py` (macOS LaunchAgent backend), `gateway_setup_wizard.py`
-(`hermes gateway setup`: `_PLATFORMS` registry, status table, per-platform prompts, service offer),
-`gateway_windows*.py`, `gateway_supervised_restart.py`, `gateway_migrate*.py`, `gateway_multiplex_*.py`,
-`gateway_enroll.py`, `gateway_command_errors.py`. Mutable state such as
-`_resolved_launchd_domain` stays a facade global.
-`process_command()` resolves the canonical name via `resolve_command()` then dispatches through
-`HermesCLI._SLASH_DISPATCH` (`canonical -> (method name, pass_arg)`), falling back to a
-`_handle_<name>_command` method by naming convention. **There is no `elif` ladder — do not add one.**
-Skill slash commands (`agent/skill_commands.py`) scan `~/.hermes/skills/` and inject as a **user
-message**, never into the system prompt (prompt caching).
+`hermes_cli/gateway.py` は `hermes gateway` ファサードです（プロセス探索、PM 対応 systemd ユニットの生成・更新、コマンドディスパッチ）。ファサードから再エクスポートされる同系統のモジュールには、`gateway_launchd.py`（macOS LaunchAgent バックエンド）、`gateway_setup_wizard.py`（`hermes gateway setup`: `_PLATFORMS` レジストリ、ステータステーブル、プラットフォーム別プロンプト、サービス提供）、`gateway_windows*.py`、`gateway_supervised_restart.py`、`gateway_migrate*.py`、`gateway_multiplex_*.py`、`gateway_enroll.py`、`gateway_command_errors.py` があります。`_resolved_launchd_domain` のような可変状態はファサードのグローバルとして保持されます。
 
-Rules: all interactive menu-pickers use curses (`hermes_cli/curses_ui.py`; example
-`hermes_cli/tools_config.py`). Never emit `\033[K` (ANSI erase-to-EOL) in spinner/display code —
-it leaks as literal `?[K` under prompt_toolkit's `patch_stdout`; space-pad instead:
-`f"\r{line}{' ' * pad}"`. Wrapper CLIs extend via the protected hooks in `cli_tui_mixin.py`
-(`website/docs/developer-guide/extending-the-cli.md`), not by overriding `run()`.
+`process_command()` は `resolve_command()` を介して正規名を解決し、`HermesCLI._SLASH_DISPATCH`（`canonical -> (method name, pass_arg)`）を通じてディスパッチし、命名規則により `_handle_<name>_command` メソッドにフォールバックします。**`elif` ラダーは存在しません — 追加しないでください。**
 
-## Slash command registry (`hermes_cli/commands.py`)
+スキルのスラッシュコマンド（`agent/skill_commands.py`）は `~/.hermes/skills/` を走査し、**ユーザーメッセージ**として注入します。システムプロンプトには決して注入しません（プロンプトキャッシュのため）。
 
-`COMMAND_REGISTRY` (list of `CommandDef`) is the single source; everything derives from it: CLI
-dispatch (`resolve_command()`), gateway `GATEWAY_KNOWN_COMMANDS` + dispatch, `gateway_help_lines()`,
-`telegram_bot_commands()` (BotCommand menu), `slack_subcommand_map()`, `COMMANDS` (autocomplete),
-`COMMANDS_BY_CATEGORY` (`show_help()`). Fields: `name` (no slash), `description`, `category`
-(`Session | Configuration | Tools & Skills | Info | Exit`), `aliases` tuple, `args_hint`,
-`cli_only`, `gateway_only`, `gateway_config_gate` (config dotpath; a `cli_only` command becomes
-gateway-available when truthy — `GATEWAY_KNOWN_COMMANDS` always includes gated commands so the
-gateway can dispatch them; help/menus show them only when the gate is open).
+ルール: すべての対話型メニューピッカーは curses を使用します（`hermes_cli/curses_ui.py`; 例 `hermes_cli/tools_config.py`）。スピナーや表示コードで `\033[K`（ANSI の行末消去）を出力しないでください — prompt_toolkit の `patch_stdout` ではリテラルな `?[K` として漏れます。代わりにスペースでパディングしてください: `f"\r{line}{' ' * pad}"`。ラッパー CLI は `cli_tui_mixin.py`（`website/docs/developer-guide/extending-the-cli.md`）の保護フックを介して拡張し、`run()` をオーバーライドしないでください。
 
-**Adding a command:** (1) `CommandDef("mycommand", "What it does", "Session", aliases=("mc",),
-args_hint="[arg]")` in `COMMAND_REGISTRY`; (2) `_handle_mycommand_command(self, cmd_original)` on the
-relevant `cli_*_mixin.py` (picked up by convention) or an explicit `_SLASH_DISPATCH` entry
-`"mycommand": ("_handle_mycommand", True)` when the method name/arg-passing differs; (3) for the
-gateway, `_handle_mycommand_command(self, event)` on the matching `gateway/slash_commands_*.py`
-mixin and list it in `_IDLE_COMMANDS` (or `_PLAIN_COMMANDS` if it must work mid-run) in
-`gateway/run_busy.py` — handlers resolve by name via `_command_handler_table`; (4) persistent
-settings via `save_config_value()` in `cli.py`. **Adding an alias** = add to `aliases`; every
-surface updates automatically. Commands that mutate system-prompt state default to deferred
-invalidation with `--now` opt-in (root invariant).
+## スラッシュコマンドレジストリ（`hermes_cli/commands.py`）
 
-### Shared goal commands
+`COMMAND_REGISTRY`（`CommandDef`のリスト）が唯一の情報源であり、そこからすべてが導き出されます。CLIディスパッチ（`resolve_command()`）、ゲートウェイの`GATEWAY_KNOWN_COMMANDS`＋ディスパッチ、`gateway_help_lines()`、`telegram_bot_commands()`（BotCommandメニュー）、`slack_subcommand_map()`、`COMMANDS`（オートコンプリート）、`COMMANDS_BY_CATEGORY`（`show_help()`）です。フィールド：`name`（スラッシュなし）、`description`、`category`（`Session | Configuration | Tools & Skills | Info | Exit`）、`aliases`タプル、`args_hint`、`cli_only`、`gateway_only`、`gateway_config_gate`（設定のドットパス。真と評価されると`cli_only`コマンドがゲートウェイで利用可能になります。`GATEWAY_KNOWN_COMMANDS`は常にゲート対象のコマンドを含むため、ゲートウェイはそれらをディスパッチできます。ヘルプ／メニューはゲートが開いているときだけそれらを表示します）。
 
-`hermes_cli/goal_command.py::dispatch_goal_command` owns `/goal` parsing and manager
-mutations. CLI, messaging gateway, TUI/Desktop/dashboard and Desktop goal controls
-all delegate there; adapters only resolve sessions, authorize gate creation, render
-results, and schedule kickoff/continuation prompts. Async callers preserve ContextVars
-when running dispatch off-loop (drafting uses profile-scoped auxiliary credentials).
-Do not add a surface-specific goal parser. ACP has no goal command or goal loop yet.
+**コマンドの追加：** (1) `CommandDef("mycommand", "What it does", "Session", aliases=("mc",),
+args_hint="[arg]")` を `COMMAND_REGISTRY` に追加する。(2) 関連する `cli_*_mixin.py` に `_handle_mycommand_command(self, cmd_original)` を追加する（規約により自動的に認識される）。メソッド名や引数の渡し方が異なる場合は、明示的な `_SLASH_DISPATCH` エントリ `"mycommand": ("_handle_mycommand", True)` を追加する。(3) ゲートウェイについては、対応する `gateway/slash_commands_*.py` ミックスインに `_handle_mycommand_command(self, event)` を追加し、`gateway/run_busy.py` 内の `_IDLE_COMMANDS`（実行途中で動作させる必要がある場合は `_PLAIN_COMMANDS`）に列挙する。ハンドラは `_command_handler_table` 経由で名前によって解決される。(4) 永続設定は `cli.py` 内の `save_config_value()` で行う。**エイリアスの追加** = `aliases` に追加するだけで、すべてのサーフェスが自動的に更新される。システムプロンプトの状態を変更するコマンドは、既定では `--now` によるオプトイン付きの遅延無効化となる（ルートの不変条件）。
 
-## Config system (`hermes_cli/config.py`)
+### 共有ゴールコマンド
 
-- **config.yaml option:** add to `DEFAULT_CONFIG`. Bump `_config_version` ONLY to actively
-  migrate/transform existing config (rename keys, restructure); new keys deep-merge automatically.
-  Top-level sections (non-exhaustive): `model, agent, terminal, compression, display, stt, tts,
+`hermes_cli/goal_command.py::dispatch_goal_command` が `/goal` の解析とマネージャの変更を管理する。CLI、メッセージングゲートウェイ、TUI/デスクトップ/ダッシュボード、およびデスクトップのゴールコントロールはすべてそこに委譲する。アダプタはセッションの解決、ゴール作成の承認、結果のレンダリング、キックオフ/継続プロンプトのスケジュールのみを行う。非同期呼び出し元は、ディスパッチをループ外で実行する際に ContextVars を保持する（ドラフト作成ではプロファイルスコープの補助資格情報を使用する）。サーフェス固有のゴールパーサを追加してはならない。ACP にはゴールコマンドもゴールループもまだ存在しない。
+
+## 設定システム（`hermes_cli/config.py`）
+
+- **config.yaml オプション:** `DEFAULT_CONFIG` に追加する。`_config_version` を上げるのは、既存の設定を能動的に移行・変換する場合（キーのリネーム、構造の再編成）のみ。新しいキーはディープマージで自動的に取り込まれる。トップレベルのセクション（網羅的ではない）: `model, agent, terminal, compression, display, stt, tts,
 memory, security, delegation, smart_model_routing, checkpoints, auxiliary, curator, skills,
-gateway, logging, cron, profiles, plugins`. `auxiliary` = per-task side-LLM overrides
-  (`agent/AGENTS.md`); `curator` = `enabled, interval_hours, min_idle_hours, stale_after_days,
-archive_after_days, backup.*`.
-- **.env = SECRETS ONLY** (keys, tokens, passwords): add to `OPTIONAL_ENV_VARS` with
-  `{"description", "prompt", "url", "password": True, "category": provider|tool|messaging|setting}`.
-  Non-secret settings go in config.yaml; if internal code needs an env mirror, bridge it in code
-  (`gateway_timeout`; `terminal.cwd` → `TERMINAL_CWD`). `MESSAGING_CWD` is removed and `TERMINAL_CWD`
-  in `.env` is deprecated — the loader warns; canonical is `terminal.cwd`. `hermes config
-set/get/unset <NAME>` route any bare name registered in `OPTIONAL_ENV_VARS` / `_EXTRA_ENV_KEYS`
-  (or carrying a `setup_hidden_env` platform suffix) to `.env` via `config_env_routing.py` — the
-  file the platform setup flows write — never to the top level of config.yaml.
-- **One writer seam.** Every write of a `config.yaml` (main or profile) goes through
-  `hermes_cli.config.atomic_config_write` (refuses deletion by omission) or the explicit
-  `atomic_config_replace` full-state path (→ `utils.atomic_roundtrip_yaml_save`, ruamel
-  round-trip): formatting survives, and the fail-closed unreadable-file guard runs first. Deliberate `pop()`/unset/migration paths use `atomic_config_replace`; additive
-  writers stay on `atomic_config_write`. Never call
-  `atomic_yaml_write` / `yaml.dump` / `yaml.safe_dump` on a config path — `scripts/check_config_yaml_writers.py`
-  (CI lint) rejects it, and `tests/hermes_cli/test_config_yaml_comment_preservation.py` guards each
-  path (#92554). The commented example blocks are appended only when the file is created.
-- **Reads** too go only through `config_backend.py`; see `developer-guide/config-backend.md`.
-  In daemon, RPC and tick code catch `ConfigBackendUnavailable` explicitly: it is a `SystemExit`, so `except Exception` won't stop it.
-- **Three loaders — know which you're in:** `load_cli_config()` (CLI, `cli.py`); `load_config()`
-  (`hermes tools/setup`, most subcommands, `hermes_cli/config.py`, merges `DEFAULT_CONFIG`);
-  `hermes_cli/config_effective.py::load_user_config_effective()` (gateway runtime via
-  `gateway/run.py::_load_gateway_config`, TUI gateway `_load_cfg`, cron, `hermes send`, doctor,
-  `hermes_time`/`hermes_logging`: user file + managed overlay + `${VAR}` expansion + model-key
-  canon, NO defaults — for presence-sensitive readers). If the CLI sees a key and the gateway
-  doesn't (or vice versa), you're on the wrong loader — check `DEFAULT_CONFIG` coverage. Never
-  hand-roll raw-read → overlay → expand; `read_user_config_raw` is for write-back round-trips only.
-- **Every `DEFAULT_CONFIG` key has a runtime reader, and every reader a registry entry.** Both drift
-  modes are silent: a registered key nothing reads (a knob that does nothing) and a reader of a key
-  never registered (never shown, never migrated; new roots also go in `_KNOWN_ROOT_KEYS`). For a new
-  key: `search_files` for `"<key>"` in `hermes_cli/config_defaults.py` AND for `<key>` outside `tests/` both hit,
-  and one invariant test sets it in a temp `config.yaml` and asserts the behaviour through the loader
-  the consuming surface uses. Under multiplex the process env never overrides a profile's YAML.
-- **Working directory:** CLI uses `os.getcwd()`; messaging uses `terminal.cwd`, bridged to
-  `TERMINAL_CWD` for child tools.
+gateway, logging, cron, profiles, plugins`。`auxiliary` はタスクごとのサイドLLM上書き設定（`agent/AGENTS.md`）。`curator` は `enabled, interval_hours, min_idle_hours, stale_after_days,
+archive_after_days, backup.*`。
+- **.env はシークレット専用**（キー、トークン、パスワード）: `OPTIONAL_ENV_VARS` に `{"description", "prompt", "url", "password": True, "category": provider|tool|messaging|setting}` を付けて追加する。シークレット以外の設定は config.yaml に置く。内部コードが環境変数ミラーを必要とする場合は、コード内でブリッジする（`gateway_timeout`。`terminal.cwd` → `TERMINAL_CWD`）。`MESSAGING_CWD` は削除され、`.env` 内の `TERMINAL_CWD` は非推奨 — ローダーが警告を出す。正規の場所は `terminal.cwd`。`hermes config
+set/get/unset <NAME>` は、`OPTIONAL_ENV_VARS` / `_EXTRA_ENV_KEYS` に登録された（または `setup_hidden_env` プラットフォーム接尾辞を持つ）任意のベア名を、プラットフォームセットアップフローが書き込むファイルである `.env` へ `config_env_routing.py` 経由でルーティングする — config.yaml のトップレベルには決して置かない。
+- **単一の書き込みシーム。** `config.yaml`（メインまたはプロファイル）への書き込みはすべて、`hermes_cli.config.atomic_config_write`（省略による削除を拒否）または明示的な`atomic_config_replace`フルステートパス（→ `utils.atomic_roundtrip_yaml_save`、ruamelラウンドトリップ）を経由します。これによりフォーマットが保持され、フェイルクローズの読み取り不能ファイルガードが最初に実行されます。意図的な`pop()`／未設定／移行パスは`atomic_config_replace`を使用し、追加型の書き込みは`atomic_config_write`に留まります。設定パスに対して`atomic_yaml_write`／`yaml.dump`／`yaml.safe_dump`を呼び出さないでください。`scripts/check_config_yaml_writers.py`（CI lint）がこれを拒否し、`tests/hermes_cli/test_config_yaml_comment_preservation.py`が各パスをガードします（#92554）。コメント付きの例ブロックは、ファイルが作成されたときのみ追加されます。
+- **読み取り**も`config_backend.py`のみを経由します。`developer-guide/config-backend.md`を参照してください。デーモン、RPC、ティックコードでは`ConfigBackendUnavailable`を明示的にキャッチします。これは`SystemExit`であるため、`except Exception`では停止しません。
+- **3つのローダー — 自分がどれを使っているか把握せよ:** `load_cli_config()`（CLI、`cli.py`）; `load_config()`
+  （`hermes tools/setup`、ほとんどのサブコマンド、`hermes_cli/config.py`、`DEFAULT_CONFIG`をマージ）;
+  `hermes_cli/config_effective.py::load_user_config_effective()`（`gateway/run.py::_load_gateway_config`経由のゲートウェイランタイム、TUIゲートウェイ`_load_cfg`、cron、`hermes send`、doctor、
+  `hermes_time`/`hermes_logging`: ユーザーファイル + 管理オーバーレイ + `${VAR}`展開 + モデルキー
+  正規化、デフォルトなし — 存在に敏感な読み手向け）。CLIがキーを認識するのにゲートウェイが
+  認識しない（またはその逆）なら、ローダーを間違えている — `DEFAULT_CONFIG`のカバレッジを確認せよ。
+  raw-read → overlay → expand を手書きするな。`read_user_config_raw`は書き戻しの往復専用である。
+- **すべての`DEFAULT_CONFIG`キーにはランタイムリーダーがあり、すべてのリーダーにはレジストリエントリがある。** 両方の
+  ドリフトモードは無音である: 登録されているのに誰も読まないキー（何もしないノブ）と、
+  一度も登録されていないキーのリーダー（表示されず、移行もされない。新しいルートも`_KNOWN_ROOT_KEYS`に入れる）。
+  新しいキーには: `search_files`を`"<key>"`用に`hermes_cli/config_defaults.py`で、かつ`<key>`用に`tests/`の外側で
+  両方にヒットさせ、1つの不変条件テストが一時`config.yaml`でそれを設定し、消費側サーフェスが使うローダーを
+  通じて挙動を検証する。マルチプレックス下ではプロセス環境はプロファイルのYAMLを上書きしない。
+- **作業ディレクトリ:** CLIは`os.getcwd()`を使い、メッセージングは`terminal.cwd`を使い、子ツール用に
+  `TERMINAL_CWD`へブリッジされる。
 
-## Skin engine (`hermes_cli/skin_engine.py`)
+## スキンエンジン（`hermes_cli/skin_engine.py`）
 
-Skins are **pure data** (`SkinConfig`); no code change to add one. `init_skin_from_config()` reads
-`display.skin` at startup; `get_active_skin()` (cached), `set_active_skin(name)` (`/skin`),
-`load_skin(name)` (user `~/.hermes/skins/*.yaml` → built-ins → default; missing values inherit
-from `default`). Built-ins in `_BUILTIN_SKINS`: `default`, `ares`, `mono`, `slate`. Keys: `colors.*`
-(banner border/title/accent/dim/text, response_border), `spinner.*` (waiting/thinking faces,
-thinking_verbs, wings), `tool_prefix`, `tool_emojis`, `branding.*` (agent_name, welcome,
-response_label, prompt_symbol). Consumers: `banner.py`, `display.py`, `cli.py`. Key-by-key table
-and YAML template: `website/docs/user-guide/features/skins.md`.
+スキンは**純粋なデータ**（`SkinConfig`）です。追加するのにコード変更は不要です。`init_skin_from_config()`は起動時に`display.skin`を読み込みます。`get_active_skin()`（キャッシュ済み）、`set_active_skin(name)`（`/skin`）、`load_skin(name)`（ユーザー`~/.hermes/skins/*.yaml` → 組み込み → デフォルト。欠落した値は`default`から継承）。`_BUILTIN_SKINS`内の組み込み：`default`、`ares`、`mono`、`slate`。キー：`colors.*`（バナーの枠線・タイトル・アクセント・ディム・テキスト、response_border）、`spinner.*`（待機中・思考中のフェイス、thinking_verbs、wings）、`tool_prefix`、`tool_emojis`、`branding.*`（agent_name、welcome、response_label、prompt_symbol）。利用者：`banner.py`、`display.py`、`cli.py`。キーごとの表とYAMLテンプレート：`website/docs/user-guide/features/skins.md`。
 
-## Update pipeline (`hermes update`)
+## 更新パイプライン（`hermes update`）
 
-Transactional, `plan → snapshot → apply → restart-per-kind → verify → report`; every stage guards a
-real field failure (fleet campaign #91277), and a PR that weakens a stage answers for that class.
-The stage-by-stage contract: `website/docs/developer-guide/cli-internals.md` § Update pipeline.
+トランザクション型で、`plan → snapshot → apply → restart-per-kind → verify → report`。各ステージは実際のフィールド障害を保護します（フリートキャンペーン #91277）。ステージを弱めるPRは、そのクラスに対して責任を負います。ステージごとの契約：`website/docs/developer-guide/cli-internals.md` § 更新パイプライン。
 
-- Snapshots cover EVERY profile with one identical file set (never partial or tiered); they are
-  file-loss recovery, `--backup` owns rollback.
-- The Windows ZIP fallback fires only when git itself failed, refuses a dirty tree, and grafts the
-  `_ZIP_PRESERVED_NESTED` build outputs into the swap.
-- Restarts are fleet-wide and drain-first, bounded by the home each unit runs on
-  (`update_fleet_scope.py`); another install's runtime is never restarted.
-- Post-commit failures are owed follow-ups, exit 0 (stash left 1, Ctrl-C 130);
-  receipts in ROOT `logs/update_receipts/`.
-- Nothing runs pulled code in the pre-pull interpreter. `update_handoff.py` and
-  `update_serve_obligations.py` are a FROZEN compat surface (`tests/compat/old_updater_surface.json`):
-  removing a name bricks releases mid-update.
-- Read #92091 (gateway-owned control socket) before adding any process-scan heuristic.
+- スナップショットは、すべてのプロファイルを同一のファイルセット1つでカバーします（部分適用や段階適用はありません）。ファイル消失からの復旧を担い、ロールバックは`--backup`が所有します。
+- WindowsのZIPフォールバックは、git自体が失敗した場合にのみ発動し、ダーティなツリーを拒否し、`_ZIP_PRESERVED_NESTED`のビルド成果物をスワップに接ぎ込みます。
+- 再起動はフリート全体で、ドレイン優先です。各ユニットが動作するホームを上限とし（`update_fleet_scope.py`）、別のインストールのランタイムを再起動することはありません。
+- コミット後の失敗はフォローアップの対象となり、終了コードは0です（stashは1、Ctrl-Cは130）。領収書はROOTの`logs/update_receipts/`にあります。
+- 取得済みコードを事前取得インタープリタで実行することはありません。`update_handoff.py`と`update_serve_obligations.py`はFROZEN互換サーフェスです（`tests/compat/old_updater_surface.json`）。名前を削除すると、更新途中のリリースが壊れます。
+- プロセススキャンのヒューリスティックを追加する前に、#92091（ゲートウェイ所有の制御ソケット）を読んでください。
 
-## Profiles (multi-instance)
+## プロファイル（マルチインスタンス）
 
-`_apply_profile_override()` in `hermes_cli/main.py` sets `HERMES_HOME` before any module import for
-single-profile commands (`hermes -p x <cmd>`), so there `get_hermes_home()` scopes to the active
-profile. The multiplex gateway and the Desktop/dashboard `serve` backend instead bind the active
-profile per activity via a contextvar override while `os.environ["HERMES_HOME"]` keeps the launch
-profile — a module constant or import-time read there freezes to the launch profile (rules in
-root). Profiles are independent
-islands by design — no live config inheritance; `--clone` copies at creation, minus messaging
-channels (`profile_channels.py`: ownership-based inventory evaluated in the SOURCE's plugin scope —
-adapter-declared keys + canonical/alias prefixes + `GATEWAY_ALLOW*`/`GATEWAY_RELAY_*`; prefixes shared
-with tools (`TWILIO_`/`EMAIL_`, plus a plugin platform's `shared_env_prefixes`) are stripped only when the source runs that adapter; never a hand
-list; a platform that left core keeps its ownership from its `LEFT_CORE` row while the plugin is absent). `--clone-channels` opts in and its live-multiplexer refusal lives in `create_profile` (CLI, REST
-and TUI all go through it). Clones are built in `profiles/.<name>.staging-<pid>` (hidden → invisible to
-`_iter_named_profile_dirs` and the hot-serve rescan) and published by one `os.rename` after the strip;
-symlinked `.env`/`config.yaml` are materialized first so a clone never writes through to its source. Multiplex
-(`gateway.multiplex_profiles`) secret-scope rules: `gateway/AGENTS.md`. The served set is
-`profiles.py::profiles_to_serve(multiplex=True)` = default + every live dir under `profiles/` — live =
-carries an identity marker (`hermes_constants.named_profile_has_identity`: `config.yaml`/`.env`/`SOUL.md`/
-`profile.yaml`/`auth.json`/`state.db`) and is not tombstoned. A marker-less dir (cron/log side-effect
-shell, stray infrastructure dir) is never listed, served, ticked, `.env`-backfilled or resolvable via `-p`
-(#95188, #99392); `profile create` replaces it only when it is also tombstoned (a live marker-less dir may hold user
-files — fail closed, never rmtree). A dangling symlinked marker still counts as identity (`is_symlink()`).
-`tools/bot_mode_probe._roster` (Bot Mode teammate roster, `bot_relay.deliver` target check) applies the same
-predicate. There is no allowlist (`gateway.multiplex_profile_allowlist` was retired in config v43).
-Enumeration is a pure read: never `mkdir` a profile home from a served path (the session store, logging,
-cron all go through `mkdir_under_hermes_home` / `_ensure_cron_dir`, which refuse a deleted or
-missing named profile, #94590). Process-global per-profile slots (MCP discovery in `mcp_startup.py`,
-tool registry overlays) key on `hermes_constants.hermes_home_key()`, never a single flag.
-`gateway.multiplex_profiles` defaults to **on**, but `GatewayConfig` keeps an unset flag `None` and
-`gateway_multiplex_mode.resolve_multiplex_mode` settles it once per boot (called from
-`load_gateway_config_for_runner`): default profile, >= 2 profiles, no standalone secondary gateway,
-no preflight blocker, migratable host → `True`; else `False` + a logged reason. Explicit values pass
-through. CLI/dashboard readers use `default_gateway_multiplexes` (live `served_profiles` record, then
-the explicit flag) — never the merged default, which would guess a verdict only the gateway makes.
-Migration from per-profile gateways: `hermes_cli/gateway_migrate.py` (`hermes gateway migrate
---multiplex`, the only mode — `--standalone` is deleted and a per-profile fleet is not a supported
-target; table-driven `_PREFLIGHT_CHECKS`; manifest `<default>/gateway_migration.json` = UNFINISHED,
-a re-run resumes from it; a named profile's `gateway install|start|run` refuse without `--force` via
-`gateway.py::_named_profile_refused_under_multiplexer`, dashboard twin
-`web_server_gateway.py::multiplexed_profile_refusal`);
-`update_cmd_fleet_verify._verify_fleet_after_update` calls `maybe_auto_migrate_after_update` on the success
-path only; `gateway_migrate_guards.py` holds the auto-path-only refusals (table `_AUTO_MIGRATION_GUARDS`:
-other service domain / UNIX user / HERMES_HOME outside `profiles/` — notices for the explicit command,
-blockers for the hook) and the `gateway.auto_multiplex_migration` opt-out (#109954). Blockers reuse `GatewayRunner._adapter_credential_fingerprint` and `platform_binds_port`;
-"has a `/p/<profile>/` ingress" is the adapter class attribute `serves_profile_prefix` — set it on a
-new HTTP-inbound adapter when it answers the prefix, never extend a list here.
-`hermes gateway restart` for a gateway Hermes did not install (custom launchd agent / unit running
-`gateway run --external-supervisor`): `gateway_supervised_restart.py` — the gateway's SELF-declared
-supervisor (control-socket `identify` answering anything but `manual`, OR the argv marker) decides; hand back via SIGUSR1 and wait
-for a fresh supervised PID, never stop + foreground `run_gateway` (that stamps the CLI's PID and wedges
-every KeepAlive respawn, #110637).
+`_apply_profile_override()` は `hermes_cli/main.py` 内で、単一プロファイル向けコマンド（`hermes -p x <cmd>`）のモジュール import より前に `HERMES_HOME` を設定するため、そこでは `get_hermes_home()` はアクティブなプロファイルにスコープされます。一方、マルチプレックスゲートウェイと Desktop/ダッシュボードの `serve` バックエンドは、contextvar によるオーバーライドでアクティブなプロファイルをアクティビティごとにバインドし、`os.environ["HERMES_HOME"]` は起動プロファイルを保持します。そのため、そこでモジュール定数や import 時読み取りを行うと起動プロファイルに固定されます（ルールは root にあります）。プロファイルは設計上、独立した島です。ライブでの設定継承はありません。`--clone` は作成時にコピーしますが、メッセージングチャネルは除きます（`profile_channels.py`: 所有権ベースのインベントリは SOURCE のプラグインスコープで評価されます。アダプターが宣言したキー + 正規/エイリアス接頭辞 + `GATEWAY_ALLOW*`/`GATEWAY_RELAY_*`。ツールと共有される接頭辞（`TWILIO_`/`EMAIL_`、およびプラグインプラットフォームの `shared_env_prefixes`）は、そのソースが当該アダプターを実行している場合にのみ除去されます。手動リストは決して使いません。コアを離れたプラットフォームは、プラグインが存在しない間も自身の `LEFT_CORE` 行から所有権を保持します）。`--clone-channels` はオプトインし、そのライブマルチプレクサー拒否は `create_profile` にあります（CLI、REST、TUI はすべてそこを通ります）。クローンは `profiles/.<name>.staging-<pid>` で構築され（隠し → `_iter_named_profile_dirs` とホットサーブ再スキャンには不可視）、ストリップ後に単一の `os.rename` によって公開されます。シンボリックリンクされた `.env`/`config.yaml` は最初に実体化されるため、クローンがソースに書き込むことはありません。マルチプレックス（`gateway.multiplex_profiles`）のシークレットスコープ規則: `gateway/AGENTS.md`。提供されるセットは `profiles.py::profiles_to_serve(multiplex=True)` = デフォルト + `profiles/` 配下のすべてのライブディレクトリです。ライブとは、アイデンティティマーカー（`hermes_constants.named_profile_has_identity`: `config.yaml`/`.env`/`SOUL.md`/`profile.yaml`/`auth.json`/`state.db`）を持ち、トゥームストーン化されていないことを指します。マーカーのないディレクトリ（cron/ログの副作用シェル、迷子のインフラディレクトリ）は、一覧表示、提供、ティック、`.env` バックフィル、`-p` 経由での解決を一切行いません（#95188、#99392）。`profile create` は、それが同時にトゥームストーン化されている場合にのみ置き換えます（ライブのマーカーなしディレクトリはユーザーファイルを保持している可能性があります。フェイルクローズし、rmtree は決して行いません）。ぶら下がったシンボリックリンクのマーカーもアイデンティティとして数えます（`is_symlink()`）。`tools/bot_mode_probe._roster`（Bot Mode のチームメイト名簿、`bot_relay.deliver` のターゲットチェック）も同じ述語を適用します。許可リストはありません（`gateway.multiplex_profile_allowlist` は設定 v43 で廃止されました）。列挙は純粋な読み取りです。提供されたパスからプロファイルホームを `mkdir` することは決してありません（セッションストア、ロギング、cron はすべて `mkdir_under_hermes_home` / `_ensure_cron_dir` を通り、これらは削除または欠落した名前付きプロファイルを拒否します、#94590）。プロセスグローバルなプロファイルごとのスロット（`mcp_startup.py` での MCP ディスカバリ、ツールレジストリのオーバーレイ）は、単一のフラグではなく `hermes_constants.hermes_home_key()` をキーにします。`gateway.multiplex_profiles` はデフォルトで **オン** ですが、`GatewayConfig` は未設定フラグを `None` のままにし、`gateway_multiplex_mode.resolve_multiplex_mode` がブートごとに一度だけそれを確定します（`load_gateway_config_for_runner` から呼び出されます）: デフォルトプロファイル、2 つ以上のプロファイル、スタンドアロンのセカンダリゲートウェイなし、プリフライトブロッカーなし、移行可能なホスト → `True`。それ以外は `False` + 記録された理由。明示的な値はそのまま通します。CLI/ダッシュボードの読み取り側は `default_gateway_multiplexes`（ライブの `served_profiles` レコード、次に明示的なフラグ）を使用します。マージされたデフォルトは決して使いません。それはゲートウェイだけが下す判定を推測することになるからです。プロファイル別ゲートウェイからの移行: `hermes_cli/gateway_migrate.py`（`hermes gateway migrate
+--multiplex`、唯一のモード — `--standalone` は削除され、プロファイル別フリートはサポート対象外です。テーブル駆動の `_PREFLIGHT_CHECKS`。マニフェスト `<default>/gateway_migration.json` = UNFINISHED、再実行はそこから再開します。名前付きプロファイルの `gateway install|start|run` は、`--force` なしでは `gateway.py::_named_profile_refused_under_multiplexer` 経由で拒否します。ダッシュボードの双子は `web_server_gateway.py::multiplexed_profile_refusal`）。`update_cmd_fleet_verify._verify_fleet_after_update` は成功パスでのみ `maybe_auto_migrate_after_update` を呼び出します。`gateway_migrate_guards.py` は自動パスのみの拒否を保持します（テーブル `_AUTO_MIGRATION_GUARDS`: 他のサービスドメイン / UNIX ユーザー / `profiles/` 外の HERMES_HOME — 明示コマンドには通知、フックにはブロッカー）と `gateway.auto_multiplex_migration` のオプトアウト（#109954）。ブロッカーは `GatewayRunner._adapter_credential_fingerprint` と `platform_binds_port` を再利用します。「`/p/<profile>/` イングレスを持つ」はアダプタークラス属性 `serves_profile_prefix` です。新しい HTTP 受信アダプターがその接頭辞に応答する場合は、それに設定してください。ここでリストを拡張しないでください。Hermes がインストールしていないゲートウェイ向けの `hermes gateway restart`（カスタム launchd エージェント / `gateway run --external-supervisor` を実行するユニット）: `gateway_supervised_restart.py` — ゲートウェイ自身が宣言したスーパーバイザー（制御ソケット `identify` が `manual` 以外に応答する、または argv マーカー）が決定します。SIGUSR1 で返し、新しい監視対象 PID を待ちます。停止してフォアグラウンドで `run_gateway` することは決してしないでください（それは CLI の PID を刻印し、すべての KeepAlive 再スポーンを詰まらせます、#110637）。
 
-Service installs are a matrix, not a unit file: `gateway.py::generate_systemd_unit(system=,
-run_as_user=)` (systemd unit generation / `systemd_unit_is_current` / `refresh_systemd_unit_if_needed` are PM-aware facade owners; user unit AND `--system` unit with `User=`; an unresolvable `User=` is a blocker,
-never a dir-owner fallback), `gateway_launchd.py::generate_launchd_plist` (`gui/<uid>` then `user/<uid>` domains, never a
-`~/Library/LaunchAgents` glob; the whole launchd backend — plist refresh, `launchctl` bootstrap/kickstart,
-`launchd_start/stop/restart/status`, detached-process degrade — lives in that sibling, with the domain cache
-`_resolved_launchd_domain` staying a facade global), Windows Scheduled Task and the Desktop-spawned backend all carry the
-profile's `HERMES_HOME` (and `HOME` for the service user) explicitly — a supervisor starts with an
-empty environment, so the env override that makes `-p` work interactively does not exist there. A
-change to install/restart/status regenerates and diffs every kind; both user and system units are
-recorded when both exist. Process liveness is `(pid, start_time)` or the canonical matchers
-(`gateway.status.live_gateway_pid_for_home`), never bare PID existence.
+サービスインストールはユニットファイルではなくマトリクスです。`gateway.py::generate_systemd_unit(system=,
+run_as_user=)`（systemdユニット生成 / `systemd_unit_is_current` / `refresh_systemd_unit_if_needed` はPM対応ファサードのオーナー。ユーザーユニットと `--system` ユニットを `User=` で扱う。解決不能な `User=` はブロッカーであり、ディレクトリオーナーへのフォールバックではない）、`gateway_launchd.py::generate_launchd_plist`（`gui/<uid>` の後に `user/<uid>` ドメイン。`~/Library/LaunchAgents` グロブは不可。launchdバックエンド全体 — plistの再読み込み、`launchctl` のbootstrap/kickstart、`launchd_start/stop/restart/status`、デタッチプロセスへの縮退 — はその兄弟に存在し、ドメインキャッシュ `_resolved_launchd_domain` はファサードのグローバルに留まる）、Windowsのスケジュールタスク、およびデスクトップ起動バックエンドはすべて、プロファイルの `HERMES_HOME`（サービスユーザーには `HOME` も）を明示的に保持します。スーパーバイザーは空の環境で起動するため、`-p` を対話的に機能させる環境上書きはそこには存在しません。インストール/再起動/ステータスの変更はすべての種類を再生成して差分を取ります。ユーザーユニットとシステムユニットの両方が存在する場合は両方記録されます。プロセスの生存確認は `(pid, start_time)` または正規のマッチャー（`gateway.status.live_gateway_pid_for_home`）であり、素のPID存在チェックではありません。
 
-## Nous free tier (`hermes_cli/anon_auth.py`)
+## Nous無料枠（`hermes_cli/anon_auth.py`）
 
-`anon_auth.run_sign_in()` is the one sign-in composition: it yields `SignInState`s that carry their
-own `.copy` / `.copy_terminal`, persists only after a completed promotion AND a token grant, and runs
-`settle_after_upgrade` exactly once per completion. `hermes auth upgrade`, the CLI and gateway
-`/login` and the desktop poller are renderers over it; the desktop's plain device-code login
-(`_nous_plain_poller`) stays a separate path. Long form: `cli-internals.md` § Nous free tier sign-in.
+`anon_auth.run_sign_in()` は唯一のサインイン構成であり、それ自体の `SignInState` を生成し、それらは独自の `.copy` / `.copy_terminal` を保持し、完了したプロモーションとトークン付与の両方が行われた後でのみ永続化され、完了ごとに `settle_after_upgrade` をちょうど一度だけ実行します。`hermes auth upgrade`、CLI とゲートウェイの `/login`、そしてデスクトップのポーラーは、いずれもその上に構築されたレンダラーです。デスクトップのプレーンなデバイスコードログイン（`_nous_plain_poller`）は、別個のパスとして残ります。詳細は `cli-internals.md` § Nous 無料枠サインインを参照してください。

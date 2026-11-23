@@ -625,8 +625,13 @@ def _update_via_zip(args, *, had_desktop_app_before_update: bool = False,
     from hermes_cli.update_cmd import _m, _complete_source_update
     # The static archive would silently ignore --branch — the exact silent-divergence bug it exists to
     # prevent. Refuse rather than lie.
-    branch = _m()._resolve_update_branch(args)
-    if branch != "main":
+    from hermes_cli.source_releases import DEXALL_BRANCH, DEXALL_REPOSITORY
+
+    repository = target_repository or DEXALL_REPOSITORY
+    branch = (completion_request or {}).get("branch") or _m()._resolve_update_branch(args)
+    if branch != "main" and not (
+        branch == DEXALL_BRANCH and repository.casefold() == DEXALL_REPOSITORY.casefold()
+    ):
         print(f"✗ --branch={branch} is not supported on the Windows ZIP-fallback update path.")
         print(
             "  This path runs when git file I/O is broken on the system. "
@@ -644,7 +649,6 @@ def _update_via_zip(args, *, had_desktop_app_before_update: bool = False,
     if target_sha is not None and not re.fullmatch(r"[0-9a-f]{40}", target_sha):
         raise ValueError("ZIP update requires an exact full commit SHA")
     ref = target_sha if target_sha is not None else f"refs/heads/{branch}"
-    repository = target_repository or "NousResearch/hermes-agent"
     if (not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository)
             or any(part in (".", "..") for part in repository.split("/"))):
         raise ValueError("ZIP update requires a GitHub owner/repository")

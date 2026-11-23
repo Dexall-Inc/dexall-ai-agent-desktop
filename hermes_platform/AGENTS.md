@@ -1,14 +1,15 @@
-# hermes_platform/ — machine facts and resource lookup
+# hermes_platform/ — マシン情報とリソース検索
 
-Applies on top of the root `AGENTS.md`.
+ルートの `AGENTS.md` の上に適用される。
 
-**Machine facts and resource lookup go through `hermes_platform`.** `hermes_platform.host` is the
-one answer for OS family, native architecture (`IsWow64Process2` → `platform.machine()`; never
-`PROCESSOR_ARCHITECTURE` alone, it reads AMD64 under x64-on-ARM64 emulation), CPU identity, and
-WSL/container/Termux. Facts are cached per process and take **no environment-variable input**, so
-a hardware recognizer (`host/products.py`) cannot be set from a shell. Distinguish the control
-host (where this Python runs) from the terminal execution target (SSH/container) and the Desktop
-client (another machine): `host.*` answers only the first. A new bare `shutil.which` or a
-hand-written known-path table outside `hermes_platform/` fails
-`tests/test_managed_runtime_resolution.py` unless allowlisted with a reason; resolvers land in
-`hermes_platform/resolver/`. Lookup never installs, downloads, or starts anything.
+**マシン情報とリソース検索は `hermes_platform` を通して行う。** `hermes_platform.host` は、
+OS ファミリー、ネイティブアーキテクチャ（`IsWow64Process2` → `platform.machine()`。x64-on-ARM64
+エミュレーション下では `PROCESSOR_ARCHITECTURE` 単体では AMD64 と読まれるため、それだけに
+依存しない）、CPU 識別、WSL/コンテナ/Termux の唯一の答えである。情報はプロセスごとにキャッシュされ、
+**環境変数の入力を受け取らない**。そのため、ハードウェア認識器（`host/products.py`）をシェルから
+設定することはできない。制御ホスト（この Python が実行される場所）と、ターミナル実行ターゲット
+（SSH/コンテナ）、そして Desktop クライアント（別のマシン）を区別すること。`host.*` が答えるのは
+最初のものだけである。`hermes_platform/` の外に新規の素の `shutil.which` や手書きの既知パス表を
+置くと、理由を付けて許可リストに登録しない限り `tests/test_managed_runtime_resolution.py` に
+失敗する。リゾルバは `hermes_platform/resolver/` に置くこと。検索は何もインストール・ダウンロード・
+起動しない。

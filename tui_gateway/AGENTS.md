@@ -1,10 +1,10 @@
-# tui_gateway/ + ui-tui/ — the TUI and its JSON-RPC backend
+# tui_gateway/ + ui-tui/ — TUIとそのJSON-RPCバックエンド
 
-Applies on top of the root `AGENTS.md`. The TUI fully replaces the classic prompt_toolkit CLI;
-activate with `hermes --tui` or `HERMES_TUI=1`. `tui_gateway` is ALSO the backend the Desktop app
-and the dashboard `/chat` talk to — changes here have three consumers.
+ルートの`AGENTS.md`の上に適用されます。TUIは従来のprompt_toolkit CLIを完全に置き換えます。
+`hermes --tui`または`HERMES_TUI=1`で有効化します。`tui_gateway`は、デスクトップアプリと
+ダッシュボード`/chat`が通信するバックエンドでもあります。ここでの変更には3つの利用者がいます。
 
-## Process model
+## プロセスモデル
 
 ```
 hermes --tui
@@ -14,193 +14,100 @@ hermes --tui
        └─ renders transcript, composer, prompts, activity
 ```
 
-Ink attaches to the profile's shared gateway owner (`hermes gateway run`, started on demand with
-its idle exit), never to a private child. `ui-tui/scripts/gateway_bootstrap.py` is a thin wrapper
-over `hermes_cli/gateway_runtime_attach.py::attach_gateway`, the attach `hermes gateway attach
---json` gives any other local client. Only `HERMES_TUI_GATEWAY_URL` (the dashboard's `/chat`)
-dials another URL, and then negotiates the wire from that listener's ready frame.
+インクはプロフィールの共有ゲートウェイオーナー（`hermes gateway run`、アイドル終了時にオンデマンドで起動）に接続され、プライベートな子には決して接続されません。`ui-tui/scripts/gateway_bootstrap.py`は`hermes_cli/gateway_runtime_attach.py::attach_gateway`の薄いラッパーであり、`hermes gateway attach
+--json`が他のローカルクライアントに与える接続です。別のURLをダイヤルするのは`HERMES_TUI_GATEWAY_URL`（ダッシュボードの`/chat`）だけであり、そのリスナーのreadyフレームからワイヤをネゴシエートします。
 
-TypeScript owns the screen. Python owns sessions, tools, model calls, and slash-command logic.
-Never move agent behaviour into the renderer.
+TypeScriptが画面を所有します。Pythonがセッション、ツール、モデル呼び出し、スラッシュコマンドのロジックを所有します。エージェントの振る舞いをレンダラーに移動させてはいけません。
 
 ## Transport
 
-Newline-delimited JSON-RPC frames over a WebSocket (`/api/ws`, `tui_gateway/ws.py`) or stdio
-(`tui_gateway/entry.py`), peer-to-peer. On the owner's ticketed socket, session methods (the
-`hermes-gateway-v1` `CANONICAL_METHODS` below) go to the session authority; other methods reach these
-handlers only with a full interactive grant (`ws_legacy_fallback.py`). Client→server method calls, server→client
-**requests** (the agent asking the user something: `approval`, `clarify`, `sudo`, `secret`, `vault.*`,
-`connection`, the desktop read/act bridges) and server→client `event` notifications. `tui_gateway/server.py`
-is the facade with the method/event catalog; methods live in `methods_*.py` siblings (`methods_config`,
-`methods_complete`, `methods_browser`, `methods_bot_relay`, ...), event publishing in
-`event_publisher.py` / `event_replay.py`, server→client requests in `server_requests.py` (`send()` blocks
-the agent thread until the response frame with the same `srq-<n>` id arrives; `cancel*` withdraws with a
-`request.cancel` event; `open_requests(sid)` is what `session.resume` / `session.events.since` replay so a
-reconnecting client re-renders the still-open questions). A client says once per connection that it
-answers them (`client.capabilities {server_requests: true}`, sent by the shared channel on `gateway.ready`);
-a WebSocket client that never did is an app build older than server→client requests, and `send()` fails
-fast for it instead of stalling the agent for the deadline. Desktop reaches the same server over WebSocket
-via `apps/shared` (`JsonRpcGatewayClient`, `onRequest`). New RPC = a new `methods_<topic>.py` or an entry
-in an existing topical sibling, registered in the table — no `if method == ...` chain (root shape rules).
+WebSocket（`/api/ws`、`tui_gateway/ws.py`）または stdio（`tui_gateway/entry.py`）を介した、改行区切りの JSON-RPC フレームによるピアツーピア通信。オーナーのチケット付きソケットでは、セッションメソッド（下記の `hermes-gateway-v1` `CANONICAL_METHODS`）はセッション権威へ送られ、その他のメソッドがこれらのハンドラに到達するのは完全な対話的許可（`ws_legacy_fallback.py`）がある場合のみ。クライアント→サーバーのメソッド呼び出し、サーバー→クライアントの **リクエスト**（エージェントがユーザーに何かを尋ねるもの：`approval`、`clarify`、`sudo`、`secret`、`vault.*`、`connection`、デスクトップの読み取り／操作ブリッジ）、およびサーバー→クライアントの `event` 通知。`tui_gateway/server.py` はメソッド／イベントのカタログを持つファサードで、メソッドは `methods_*.py` の兄弟（`methods_config`、`methods_complete`、`methods_browser`、`methods_bot_relay`、...）に、イベント公開は `event_publisher.py` / `event_replay.py` に、サーバー→クライアントのリクエストは `server_requests.py` に存在する（`send()` は、同じ `srq-<n>` id を持つレスポンスフレームが届くまでエージェントスレッドをブロックし、`cancel*` は `request.cancel` イベントで取り下げ、`open_requests(sid)` は `session.resume` / `session.events.since` が再生するもので、再接続したクライアントがまだ開いている質問を再描画できるようにする）。クライアントは接続ごとに一度、それらに応答することを宣言し（`client.capabilities {server_requests: true}`、共有チャネルが `gateway.ready` で送信）、一度も宣言しなかった WebSocket クライアントはサーバー→クライアントのリクエストより古いアプリビルドであり、その場合 `send()` はエージェントを期限まで停滞させる代わりに即座に失敗する。デスクトップは `apps/shared`（`JsonRpcGatewayClient`、`onRequest`）を介して WebSocket で同じサーバーに到達する。新しい RPC は、新しい `methods_<topic>.py` か、既存のトピック別兄弟へのエントリを追加し、テーブルに登録する——`if method == ...` チェーンは不要（ルート形状の規則）。
 
-**The wire is declared in Python and generated for TypeScript** (`tui_gateway/contracts/`). Every method
-has a `Params` + `Result` model, every server→client request a `Params` + `Result`, every event a
-`Payload` — one Pydantic class each, `extra="forbid"` by default (`OpenModel` for producer-owned dicts).
-`register_method` refuses an undeclared name at import; the dispatcher rejects unknown param keys
-(`4000` + key path) and, under `HERMES_TEST_ISOLATION=1`, raises `ContractViolation` when a handler's
-result or an emitted payload does not match its model (production only logs). `apps/shared/src/
-gateway-contract.generated.ts` (`RpcMethods`, `ServerRequestMap`, `BackendGatewayEventMap` + every value
-shape) and `gateway-contract.openrpc.json` are rendered by `scripts/gen_gateway_contracts.py`;
-`tests/tui_gateway/contracts/test_generated.py` fails when they are stale, so the loop is: change the model →
-regenerate → `tsc` shows every consumer the field moved. `apps/shared/src/gateway-events.ts` only adds
-the client-local synthetic events and the `GatewayEvent` envelope on top.
-The native `hermes-gateway-v1` transport has a separate `CANONICAL_METHODS` catalog in
-`contracts/canonical*.py`, declared with `canonical_method(...)`. `gateway/session_controls.py::
-AuthorityConnection` validates parameters and successful results against it; unknown/missing
-parameter keys return `4001 invalid_params`. Reuse a standalone model only when its wire is
-identical: shared method names can carry different snapshots, admission receipts and producer
-results. The same generator emits `CanonicalRpcMethods` and OpenRPC `x-canonical-methods` without
-widening `RpcMethods`. `tests/gateway/test_canonical_wire_contract.py` checks handler coverage.
-A method family whose names exist only at runtime (`plugin.<plugin_id>.<name>`) is one
-`canonical_namespace(...)` entry in `CANONICAL_NAMESPACES` instead: a pattern, a prefix, open params and the
-`runtime.describe` capability clients gate on (`CanonicalRpcNamespaces` / OpenRPC `x-canonical-namespaces`).
-New question for the user = `_ask("<method>", sid, params, timeout)` in the emitter, a handler in
-`apps/desktop/.../gateway-event/server-requests.ts` and `ui-tui/src/app/createServerRequestHandler.ts`,
-and a `server_request(...)` in `contracts/server_requests.py`.
-New event = `event("<type>", Payload)` in `contracts/events.py`; the emitter is checked against it.
+**ワイヤはPythonで宣言され、TypeScript向けに生成される**（`tui_gateway/contracts/`）。すべてのメソッドに`Params`と`Result`のモデルがあり、すべてのサーバー→クライアント要求に`Params`と`Result`、すべてのイベントに`Payload`がある。それぞれ1つのPydanticクラスで、デフォルトでは`extra="forbid"`（プロデューサー所有のdictには`OpenModel`）。`register_method`はインポート時に未宣言の名前を拒否し、ディスパッチャは未知のパラメータキーを拒否する（`4000`＋キーパス）。さらに`HERMES_TEST_ISOLATION=1`の下では、ハンドラの結果または送信されたペイロードがそのモデルと一致しない場合に`ContractViolation`を送出する（本番環境ではログのみ）。`apps/shared/src/
+gateway-contract.generated.ts`（`RpcMethods`、`ServerRequestMap`、`BackendGatewayEventMap`＋すべての値の形状）と`gateway-contract.openrpc.json`は`scripts/gen_gateway_contracts.py`によってレンダリングされ、`tests/tui_gateway/contracts/test_generated.py`はそれらが古くなっていると失敗する。したがってループは次のとおり：モデルを変更する→再生成する→`tsc`がすべてのコンシューマーにフィールドが移動したことを示す。`apps/shared/src/gateway-events.ts`は、クライアントローカルの合成イベントと`GatewayEvent`エンベロープをその上に追加するだけである。
 
-## Profile scope in RPC methods
+ネイティブの`hermes-gateway-v1`トランスポートには、`contracts/canonical*.py`内に別の`CANONICAL_METHODS`カタログがあり、`canonical_method(...)`で宣言される。`gateway/session_controls.py::
+AuthorityConnection`はパラメータと成功結果をそれに対して検証し、未知または欠落したパラメータキーは`4001 invalid_params`を返す。スタンドアロンモデルを再利用するのは、そのワイヤが同一の場合のみ：共有メソッド名が異なるスナップショット、入場受理、プロデューサー結果を運ぶことがある。同じジェネレータが`CanonicalRpcMethods`とOpenRPCの`x-canonical-methods`を、`RpcMethods`を広げることなく生成する。`tests/gateway/test_canonical_wire_contract.py`はハンドラのカバレッジを検査する。
 
-One `serve` process may host sessions from several profile homes (Desktop pooled backends launch
-under a profile; the dashboard serves several). The launch profile is a profile: "default" means
-the launch home, never `~/.hermes`. The first non-launch home hosted flips
-`launch_profile_policy.py` → `set_multiplex_active(True)`; without it every fail-closed guard is
-silently off. Every method that reads or writes home-, config- or `.env`-derived state runs under
-`server.py::@_profile_scoped` (resolved from the live session's `profile_home`, or the explicit
-`profile` argument for sessionless calls) and, for tool/agent construction,
-`methods_tools.py::_profile_scoped_rpc`; the tokens come from `model_switch.py::
-_profile_runtime_scope_tokens(profile_home)` — home + secret scope + terminal scope together.
-**A method that sets only `get_hermes_home_override()` is half-bound**: config paths resolve to the
-right profile while credentials and `TERMINAL_*` policy still come from the launch profile.
-Off-turn paths bind the same way: `session_lifecycle.py::_finalize_session` / `_teardown_session`
-enter `_session_profile_runtime_scope(session)` around `on_session_end`, the memory commit and
-`agent.close()` (their callers are unscoped reapers, Timers, atexit and pool threads); background
-threads start via `agent.memory_provider.spawn_context_thread`, never bare `threading.Thread`;
-children act for the served profile through `tools/environments/local.py::served_profile_child_env`
-(`hermes -p X` workers, `key_cmd` helpers, browser drivers), never `dict(os.environ)`. Find
-unscoped handlers before adding one: `search_files` for `^(async )?def ` with
-`file_glob="methods_*.py"` in `tui_gateway/`, `context=1`, and check each for `_profile_scoped`. Probe with two on-disk homes and a `.env` name present only in the secondary:
-call the method for that session and assert the secondary's value resolves and the launch
-profile's does not, and that `os.environ` is unchanged afterwards.
+名前が実行時にのみ存在するメソッドファミリー（`plugin.<plugin_id>.<name>`）は、`CANONICAL_NAMESPACES`内の1つの`canonical_namespace(...)`エントリになる：パターン、プレフィックス、オープンパラメータ、そしてクライアントがゲートする`runtime.describe`機能（`CanonicalRpcNamespaces`／OpenRPCの`x-canonical-namespaces`）。
 
-## Key surfaces
+ユーザーへの新しい質問＝エミッタ内の`_ask("<method>", sid, params, timeout)`、`apps/desktop/.../gateway-event/server-requests.ts`と`ui-tui/src/app/createServerRequestHandler.ts`内のハンドラ、および`contracts/server_requests.py`内の`server_request(...)`。
 
-| Surface | Ink component | Gateway method / event |
+新しいイベント＝`contracts/events.py`内の`event("<type>", Payload)`。エミッタはそれに対して検査される。
+
+## RPCメソッドにおけるプロフィールのスコープ
+
+1つの `serve` プロセスが、複数のプロファイルホームのセッションをホストすることがあります（Desktop のプール型バックエンドはプロファイル配下で起動され、ダッシュボードは複数を提供します）。起動プロファイルはプロファイルであり、「default」は起動ホームを意味し、決して `~/.hermes` ではありません。ホストされる最初の非起動ホームが `launch_profile_policy.py` を `set_multiplex_active(True)` に切り替えます。これが無いと、すべてのフェイルクローズ型ガードが暗黙に無効になります。
+
+ホーム・設定・`.env` 由来の状態を読み書きするすべてのメソッドは、`server.py::@_profile_scoped`（ライブセッションの `profile_home`、またはセッションレス呼び出しの場合は明示的な `profile` 引数から解決）の下で実行され、ツール・エージェント構築では `methods_tools.py::_profile_scoped_rpc` の下で実行されます。トークンは `model_switch.py::
+_profile_runtime_scope_tokens(profile_home)`、つまりホーム＋シークレットスコープ＋ターミナルスコープを合わせたものから得られます。
+
+**`get_hermes_home_override()` のみを設定するメソッドは半分しかバインドされていません**。設定パスは正しいプロファイルに解決される一方、資格情報と `TERMINAL_*` ポリシーは依然として起動プロファイルから取得されます。
+
+ターン外のパスも同じようにバインドされます。`session_lifecycle.py::_finalize_session` / `_teardown_session` は `on_session_end` を囲む `_session_profile_runtime_scope(session)` に入り、メモリコミットと `agent.close()` も同様です（これらの呼び出し元はスコープ外のリーパー、タイマー、atexit、プールスレッドです）。バックグラウンドスレッドは `agent.memory_provider.spawn_context_thread` 経由で開始し、素の `threading.Thread` は使わないでください。子プロセスは `tools/environments/local.py::served_profile_child_env`（`hermes -p X` ワーカー、`key_cmd` ヘルパー、ブラウザドライバ）を通じて提供対象プロファイルのために動作し、`dict(os.environ)` は使わないでください。
+
+追加する前にスコープ外のハンドラを探してください。`tui_gateway/` 内の `file_glob="methods_*.py"` を持つ `^(async )?def ` に対する `search_files`、`context=1` を確認し、それぞれについて `_profile_scoped` を検査してください。2つのオンディスクホームと、セカンダリにのみ存在する `.env` 名でプローブします。そのセッションに対してメソッドを呼び出し、セカンダリの値が解決され、起動プロファイルの値が解決されないこと、およびその後 `os.environ` が変わらないことを検証してください。
+
+## 主要なサーフェス
+
+| サーフェス | Ink コンポーネント | ゲートウェイのメソッド / イベント |
 |---|---|---|
-| Chat streaming | `app.tsx` + `messageLine.tsx` | `prompt.submit` → `message.delta` / `message.complete` |
-| Tool activity | `thinking.tsx` | `tool.start` / `tool.generating` / `tool.complete` |
-| Approvals | `prompts.tsx` | server→client request `approval` → response `{choice}` |
-| Clarify / sudo / secret | `prompts.tsx`, `maskedPrompt.tsx` | server→client requests `clarify` / `sudo` / `secret` (`server_requests.py`) |
-| Session picker | `sessionPicker.tsx` | `session.list` / `session.resume` |
-| Slash commands | local handler + fallthrough | `slash.exec` → `_SlashWorker` (`slash_worker_client.py`); `command.dispatch` |
-| Completions | `useCompletion` hook | `complete.slash`, `complete.path` (under a non-local `terminal.backend`, `complete.path` lists the directory through the session's terminal backend — never the gateway host, whose same-named tree would look right and be wrong) |
-| Theming | `theme.ts` + `branding.tsx` | `gateway.ready` carries skin data |
-| Connection operations (desktop card) | desktop `store/connection-request.ts` | `connection.request` → `connection.update`* → `connection.respond {op_id}`; `connectors.operation.status`. The op lives in `tools/connectors/live.py`; the card never parks the tool thread (`methods_connectors.py`). |
+| チャットのストリーミング | `app.tsx` + `messageLine.tsx` | `prompt.submit` → `message.delta` / `message.complete` |
+| ツールのアクティビティ | `thinking.tsx` | `tool.start` / `tool.generating` / `tool.complete` |
+| 承認 | `prompts.tsx` | サーバー→クライアントのリクエスト `approval` → レスポンス `{choice}` |
+| 明確化 / sudo / シークレット | `prompts.tsx`, `maskedPrompt.tsx` | サーバー→クライアントのリクエスト `clarify` / `sudo` / `secret` (`server_requests.py`) |
+| セッションピッカー | `sessionPicker.tsx` | `session.list` / `session.resume` |
+| スラッシュコマンド | ローカルハンドラ + フォールスルー | `slash.exec` → `_SlashWorker` (`slash_worker_client.py`); `command.dispatch` |
+| 補完 | `useCompletion` フック | `complete.slash`, `complete.path` (非ローカルの `terminal.backend` の下では、`complete.path` がセッションのターミナルバックエンドを通じてディレクトリを一覧表示します。ゲートウェイホストは同名のツリーが正しく見えても誤りとなるため、決して使用しません) |
+| テーマ | `theme.ts` + `branding.tsx` | `gateway.ready` がスキンデータを運びます |
+| 接続操作（デスクトップカード） | デスクトップ `store/connection-request.ts` | `connection.request` → `connection.update`* → `connection.respond {op_id}`; `connectors.operation.status`。この操作は `tools/connectors/live.py` に存在し、カードはツールスレッドをパークしません (`methods_connectors.py`)。 |
 
-## Shared subagent snapshots
+## 共有サブエージェントのスナップショット
 
-`subagent.list({session_id})` returns `{subagents, delegations}` for the calling
-transport's live session. The roster is read-only and follows the CONVERSATION: exact-owner
-records plus children whose durable lineage (`owner_agent_session_id` → compression tip, the
-same spine as in-process `delegate_task(action="list")`) is the session's agent, because a
-Desktop reconnect / resume remints the UI session id and compression rotates the key while the
-children keep running (#114909). Control (`steer` / `interrupt` / `tail`) stays pinned to the
-exact session record and transport. Child authority is resolved at RPC time against the owning session's
-LIVE transport slot, so every authenticated reattach path (prompt.submit, queued drain,
-resume, activate, viewer failover) carries it with no registry bookkeeping — never add a
-per-record transport sync at an attach site; foreign or retired generations remain uncontrollable. `last_tool` is the last started tool, not an in-flight
-indicator. Async completion units are not agents and lack exact generation authority;
-`delegations` remains an empty array for wire compatibility. No dispatch context,
-results, callbacks, or routing keys are sent. Clients hydrate from this snapshot
-on their existing poll and avoid updates when unchanged.
+`subagent.list({session_id})` は、呼び出し元トランスポートのライブセッションに対して `{subagents, delegations}` を返します。ロスターは読み取り専用で、CONVERSATION に従います。つまり、正確なオーナーレコードと、その永続的な系統（`owner_agent_session_id` → 圧縮チップ。プロセス内の `delegate_task(action="list")` と同じスパイン）がセッションのエージェントである子レコードです。これは、Desktop の再接続／再開が UI セッション ID を再発行し、圧縮がキーをローテーションする一方で、子は実行を継続するためです（#114909）。制御（`steer` / `interrupt` / `tail`）は、正確なセッションレコードとトランスポートに固定されたままです。子の権限は RPC 時に、所有セッションの LIVE トランスポートスロットに対して解決されるため、認証済みの再接続経路（prompt.submit、キューのドレイン、resume、activate、ビューアのフェイルオーバー）はすべて、レジストリの簿記なしでそれを保持します。アタッチ箇所にレコード単位のトランスポート同期を追加してはなりません。外部または退避した世代は制御不能のままです。`last_tool` は最後に開始されたツールであり、実行中を示すものではありません。非同期完了ユニットはエージェントではなく、正確な世代権限を持ちません。`delegations` はワイヤ互換性のため空の配列のままです。ディスパッチコンテキスト、結果、コールバック、ルーティングキーは送信されません。クライアントはこのスナップショットから既存のポーリングでハイドレートし、変更がない場合は更新を回避します。
 
-`subagent.tail({session_id, subagent_id})` returns
-`{subagent_id, available, text, truncated}`: the last 16 KiB of the live child's
-existing transcript. Poll only the selected detail. Missing/finished/foreign
-children return an unavailable empty snapshot; no client-supplied path is opened.
-This is live-only, not persisted completion history. Invalid session/transport
-returns error 4001. The child's stored rows (live or finished, polled from a cursor)
-are the canonical owner's `session.transcript` with `subagent_id`; list rows name the
-child's `child_session_id` on both transports. `subagent.steer({session_id, subagent_id, text})` remains the
-shared control: `status: queued` acknowledges acceptance, not delivery; final
-boundary races are reported by the existing runtime as `missed_steer`.
-`subagent.interrupt({session_id, subagent_id})` requires the same exact live
-session/transport/generation ownership, including for subtree members. Missing
-RPC session authority is rejected; direct in-process `interrupt_subagent(id)`
-retains its legacy unscoped contract.
+`subagent.tail({session_id, subagent_id})` は `{subagent_id, available, text, truncated}` を返す。
+実行中の子エージェントの既存の会話履歴から、末尾16 KiBを取得する。ポーリングするのは選択中の詳細だけ。
+子が存在しない、終了済み、または別の所有者に属する場合は、利用不可を示す空のスナップショットを返す。
+クライアントから渡されたパスは開かない。この RPC は実行中の情報だけを扱い、永続化済みの完了履歴は扱わない。
+セッションまたはトランスポートが無効ならエラー4001を返す。子の保存済み行は、実行中・終了済みを問わず、
+正規の所有者の `session.transcript` から `subagent_id` を付け、カーソルを指定して取得する。
+一覧の行には、両方のトランスポートで子の `child_session_id` が入る。
+共通の制御は引き続き `subagent.steer({session_id, subagent_id, text})` を使う。
+`status: queued` は受付を示す。配信完了は保証しない。終了境界で競合した場合は、既存のランタイムが
+`missed_steer` として報告する。
+`subagent.interrupt({session_id, subagent_id})` は、子孫も含め、実行中のセッション、トランスポート、世代の
+所有権が完全に一致することを要求する。RPC セッションの権限がなければ拒否する。プロセス内で直接呼ぶ
+`interrupt_subagent(id)` は、スコープを限定しない従来の契約を維持する。
 
-## Slash command flow
+## スラッシュコマンドの処理
 
-1. Built-in client commands (`/help`, `/quit`, `/clear`, `/resume`, `/copy`, `/paste`, ...) are
-   handled locally in `app.tsx`.
-2. Everything else → `slash.exec`, which runs in the persistent `_SlashWorker` subprocess →
-   `command.dispatch` fallback, which the gateway resolves into a skill / alias / exec directive
-   (a skill command resolves to `{type: "skill", message}` and is submitted as a normal prompt).
+1. クライアント組み込みのコマンド（`/help`、`/quit`、`/clear`、`/resume`、`/copy`、`/paste` など）は
+   `app.tsx` がローカルで処理する。
+2. その他は `slash.exec` に渡し、常駐する `_SlashWorker` サブプロセスで実行する。フォールバックの
+   `command.dispatch` で、ゲートウェイがスキル、エイリアス、実行ディレクティブに解決する。
+   スキルコマンドは `{type: "skill", message}` に解決し、通常のプロンプトとして送信する。
 
-`commands.catalog` (empty-query list) includes built-ins, user `quick_commands`, plugin commands,
-and skill-derived commands. `complete.slash` uses the existing CLI completer (registry, plugins,
-skills/bundles, argument completions); quick commands remain catalog-only. Shared data builders
-live in `tui_gateway/command_discovery.py`, without importing the legacy server. Definitions
-come from `hermes_cli/commands.py` (`hermes_cli/AGENTS.md`).
 
-The canonical gateway exposes the same two discovery RPCs through `gateway/session_discovery.py`.
-It requires authenticated `session:read` capability and the authority's exact profile before any
-discovery. An optional named `profile` must resolve to that same home; a foreign selector returns
-`profile_mismatch`. Discovery runs off-loop in the authority's profile scope, without creating a
-legacy session or execution runtime. Catalog warnings, categories, aliases, desktop metadata,
-skill usage/origin, and completion replacement offsets retain their legacy shapes. Discovery is
-not an assertion that every listed slash execution command is implemented by the canonical RPCs.
+`commands.catalog`（空クエリリスト）には、組み込み、ユーザー `quick_commands`、プラグインコマンド、およびスキル由来のコマンドが含まれます。`complete.slash` は既存の CLI コンプリーター（レジストリ、プラグイン、スキル/バンドル、引数補完）を使用し、クイックコマンドはカタログのみに留まります。共有データビルダーは `tui_gateway/command_discovery.py` にあり、レガシーサーバーをインポートしません。定義は `hermes_cli/commands.py`（`hermes_cli/AGENTS.md`）から取得されます。
 
-## Canonical local slash execution
+正規のゲートウェイは、`gateway/session_discovery.py` を通じて同じ2つのディスカバリー RPC を公開します。ディスカバリーの前に、認証済みの `session:read` 機能と、権限元の正確なプロファイルが必要です。任意の名前付き `profile` は、その同じホームに解決される必要があります。外部セレクターは `profile_mismatch` を返します。ディスカバリーは、権限元のプロファイルスコープ内でループ外で実行され、レガシーセッションや実行ランタイムを作成しません。カタログの警告、カテゴリ、エイリアス、デスクトップメタデータ、スキルの使用状況/由来、および補完置換オフセットは、レガシー形式を維持します。ディスカバリーは、リストされたすべてのスラッシュ実行コマンドが正規の RPC によって実装されていることを保証するものではありません。
 
-`gateway/session_commands.py` adapts both `slash.exec({session_id, command})` and
-`command.dispatch({session_id, name, arg})` without loading the legacy server or
-slash worker. Optional `profile` must name the authority's exact profile. Only
-server-registered local sources belonging to the authenticated actor may dispatch;
-caller-supplied source, routing, credentials, or platform fields are rejected.
+## 正規のローカルスラッシュ実行
 
-Reviewed gateway handlers: `help`, `commands`, `status`, `context`, `version`,
-`whoami` require `session:read`; `title` requires `session:control` (including its
-query form). Registry aliases are accepted. Existing registry busy rejection and
-mid-turn dispatch policies apply. Results are `{type: "exec", output}`.
+`gateway/session_commands.py` は、レガシーサーバーやスラッシュワーカーを読み込むことなく、`slash.exec({session_id, command})` と `command.dispatch({session_id, name, arg})` の両方に適応します。任意の `profile` は、権限者の正確なプロファイルを指定する必要があります。ディスパッチできるのは、認証されたアクターに属するサーバー登録済みのローカルソースのみです。呼び出し元が指定したソース、ルーティング、認証情報、またはプラットフォームのフィールドは拒否されます。
 
-Profile skills and configured quick-command aliases to these commands/skills are
-supported. Skill resolution requires `session:submit` and returns the existing
-`{type: "skill", name, message, display}` directive. Desktop and Ink already submit
-that message through `prompt.submit`, retaining their own durable input identity.
-Resolution itself does not start a turn or change the cached system prompt; the
-normal durable admission path owns FIFO, retries, approvals, and execution.
+レビュー済みのゲートウェイハンドラー: `help`、`commands`、`status`、`context`、`version`、`whoami` は `session:read` を必要とします。`title` は `session:control` を必要とします(そのクエリ形式を含む)。レジストリのエイリアスは受け入れられます。既存のレジストリのビジー拒否およびターン途中のディスパッチポリシーが適用されます。結果は `{type: "exec", output}` です。
 
-`type: exec` quick commands and plugin slash commands require `session:control` and
-run through the messaging gateway's own dispatch (`gateway/run_inbound_hooks.py`: slash
-access policy, 30 s sanitized-env exec with redacted output, plugin session env).
-All other commands return `unsupported_command`, including bundles, runtime/config
-mutation, approval/secret slash shortcuts, and lifecycle commands. Use the existing generation-bound control RPCs where
-available. Catalog presence alone does not imply execution support. No legacy
-fallback is installed on the canonical transport.
+プロファイルスキルと、これらのコマンド/スキルに設定されたクイックコマンドエイリアスがサポートされます。スキルの解決には `session:submit` が必要で、既存の `{type: "skill", name, message, display}` ディレクティブを返します。Desktop と Ink はすでにそのメッセージを `prompt.submit` 経由で送信しており、独自の永続的な入力 ID を保持しています。解決自体はターンを開始せず、キャッシュされたシステムプロンプトも変更しません。通常の永続的な受け入れ経路が FIFO、リトライ、承認、実行を管理します。
 
-## Canonical native projections
+`type: exec` クイックコマンドとプラグインのスラッシュコマンドには `session:control` が必要で、メッセージングゲートウェイ自身のディスパッチを通じて実行されます（`gateway/run_inbound_hooks.py`：スラッシュアクセスポリシー、出力を秘匿化した30秒のサニタイズ環境での実行、プラグインセッション環境）。その他のコマンドはすべて `unsupported_command` を返します。バンドル、ランタイム／設定の変更、承認・秘密情報のスラッシュショートカット、ライフサイクルコマンドを含みます。利用可能な場合は既存の世代バインド制御RPCを使用してください。カタログに存在するだけでは実行サポートを意味しません。正規のトランスポートにはレガシーフォールバックはインストールされていません。
 
-`gateway/session_config.py` exposes profile-authorized `config.get` presentation
-reads and `model.options` through the shared provider inventory. `full` contains
-display, approval and paste preferences plus voice record/submit settings, not
-provider/MCP/plugin credentials. Session reasoning/model selection comes from the
-retained agent or frozen launch policy. `mtime.mcp_rev` is pinned to that policy;
-cosmetic edits do not request a cache-breaking live MCP reload. Busy overrides
-remain session-scoped; composer model changes use `session.mutate`, never global
-`config.set`. Discovery can refresh provider metadata, but never starts inference.
+## 正規のネイティブプロジェクション
 
-## Dev commands
+`gateway/session_config.py` は、共有プロバイダーインベントリを通じて、プロファイル認可済みの `config.get` プレゼンテーション読み取りと `model.options` を公開します。`full` には、表示・承認・貼り付けの設定に加えて、音声の録音・送信設定が含まれますが、プロバイダー／MCP／プラグインの認証情報は含まれません。セッションの推論・モデル選択は、保持されたエージェントまたは凍結された起動ポリシーから取得されます。`mtime.mcp_rev` はそのポリシーに固定されます。外観上の編集はキャッシュを破壊するライブMCPリロードを要求しません。ビジー状態のオーバーライドはセッションスコープのままです。コンポーザーのモデル変更には `session.mutate` を使用し、グローバルな `config.set` は使用しないでください。ディスカバリはプロバイダーメタデータを更新できますが、推論を開始することはありません。
+
+## 開発コマンド
 
 ```bash
 cd ui-tui
@@ -214,11 +121,8 @@ pnpm run fmt       # prettier
 pnpm test          # vitest
 ```
 
-From the repository root, `just tui` runs the same watch mode.
+リポジトリのルートから、`just tui` で同じウォッチモードが実行されます。
 
-Python tests: `tests/tui_gateway/` via `scripts/run_tests.sh`. TS tests: vitest in `ui-tui`. A
-Python test that asserts about `package.json` / `.ts` sources will not run on a JS-only PR — keep
-JS-side assertions in vitest (root testing rules). Root TypeScript style rules apply.
+Python テスト: `tests/tui_gateway/` を `scripts/run_tests.sh` 経由で実行します。TS テスト: `ui-tui` 内の vitest を使用します。`package.json` / `.ts` のソースについて検証する Python テストは、JS のみの PR では実行されません。JS 側の検証は vitest 側に置いてください（ルートのテスト規則）。ルートの TypeScript スタイル規則が適用されます。
 
-Related: `web/AGENTS.md` (dashboard embeds this TUI over a PTY), `apps/desktop/AGENTS.md` (own
-renderer on the same backend).
+関連: `web/AGENTS.md`（ダッシュボードはこの TUI を PTY 経由で埋め込みます）、`apps/desktop/AGENTS.md`（同じバックエンド上で独自のレンダラーを使用します）。

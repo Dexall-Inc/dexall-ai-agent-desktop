@@ -18,7 +18,9 @@ import urllib.error
 import urllib.request
 
 from hermes_constants import get_hermes_home
-from hermes_cli.source_releases import OFFICIAL_REPOSITORY, _GITHUB_ORIGIN, resolve_source_target
+from hermes_cli.source_releases import (
+    DEXALL_BRANCH, DEXALL_REPOSITORY, OFFICIAL_REPOSITORY, _GITHUB_ORIGIN, resolve_source_target,
+)
 
 logger = logging.getLogger(__name__)
 UPDATE_AVAILABLE_NO_COUNT = -1
@@ -264,12 +266,12 @@ def _installed_git(git: str) -> str:
 
 
 def _read_checkout(root: Path, git: str, embedded: Optional[str]) -> _Checkout:
-    # An embedded revision has no checkout to ask: it always tracks the official repository.
+    # An embedded revision has no checkout to ask: it tracks the Dexall repository.
     head = embedded or _git_stdout(["rev-parse", "HEAD"], cwd=root, git=git)
     current_branch = None if embedded else _git_stdout(["rev-parse", "--abbrev-ref", "HEAD"], cwd=root, git=git)
     origin = "" if embedded else (_git_stdout(["remote", "get-url", "origin"], cwd=root, git=git) or "")
     match = _GITHUB_ORIGIN.fullmatch(origin)
-    repository = OFFICIAL_REPOSITORY if embedded else (match[1] if match else None)
+    repository = DEXALL_REPOSITORY if embedded else (match[1] if match else None)
     dirty = False if embedded else bool(_git_stdout(["status", "--porcelain"], cwd=root, git=git))
     return _Checkout(root, git, embedded, head, current_branch, origin, repository, dirty)
 
@@ -485,8 +487,10 @@ def _branch_remote(co: _Checkout, selected_branch: str) -> str:
                     and co.origin.lower().startswith(("git@", "ssh://")))
     # The public official repo does not require the user's SSH credentials.
     # Forks must keep their own origin, including its authentication.
+    if co.embedded:
+        return f"https://github.com/{DEXALL_REPOSITORY}.git"
     return (f"https://github.com/{OFFICIAL_REPOSITORY}.git"
-            if co.embedded or (official_ssh and selected_branch != "main") else "origin")
+            if official_ssh and selected_branch != "main" else "origin")
 
 
 def _heal_deleted_branch(branch_config_path: Path, desktop_config: dict) -> None:
@@ -592,14 +596,19 @@ def check_for_updates(*, install_root: Path | None = None, home: Path | None = N
     co = _read_checkout(root, _installed_git(git), embedded)
     desktop_config = _read_json(branch_config_path) if branch_config_path else None
     configured_branch = _configured_branch(desktop_config)
-    selected_branch = branch or configured_branch or _checked_out_branch(co.current_branch, "main")
+    default_branch = "main"
+    if co.repository and co.repository.casefold() == DEXALL_REPOSITORY.casefold():
+        default_branch = DEXALL_BRANCH
+        if configured_branch == "main":
+            configured_branch = DEXALL_BRANCH
+    selected_branch = branch or configured_branch or _checked_out_branch(co.current_branch, default_branch)
     result.update(supported=True, currentSha=co.head, currentBranch=co.current_branch, dirty=co.dirty)
     if channel != "main":
         result["channel"] = channel
     else:
         result["branch"] = selected_branch
     identity = {"root": str(root), "home": str(home), "head": co.head, "origin": co.origin, "branch": selected_branch,
-                "channel": channel, "embedded": embedded, "branchOverride": branch is not None, "channelProtocol": 3,
+                "channel": channel, "embedded": embedded, "branchOverride": branch is not None, "channelProtocol": 4,
                 "forwardOnly": forward_only}
     cache_file = Path(cache_path) if cache_path is not None else home / "source-checks" / f"{install_id(root)}.json"
     now = time.time()
@@ -617,7 +626,10 @@ def check_for_updates(*, install_root: Path | None = None, home: Path | None = N
         source_target = _resolve_channel(result, channel, co, forward_only=forward_only)
         if source_target is not None and not source_target.commit:
             # The record supplies a default, not permission to leave the user's branch.
-            selected_branch = configured_branch or _checked_out_branch(co.current_branch, source_target.branch)
+            current_branch = co.current_branch
+            if source_target.repository.casefold() == DEXALL_REPOSITORY.casefold() and current_branch == "main":
+                current_branch = DEXALL_BRANCH
+            selected_branch = configured_branch or _checked_out_branch(current_branch, source_target.branch)
     if "error" not in result and (source_target is None or source_target.branch is not None):
         # Only a Desktop-configured branch the caller did not override is healed.
         heal = branch_config_path and not branch and configured_branch == selected_branch

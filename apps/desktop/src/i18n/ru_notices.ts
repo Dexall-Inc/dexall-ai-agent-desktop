@@ -11,7 +11,7 @@ export const ruNotices = {
   butterbar: {
     goTo: (index, total) => `Показать уведомление ${index} из ${total}`,
     legal: {
-      before: 'Использование Hermes Agent регулируется нашими ',
+      before: 'Использование ALL AI5.2 TACT регулируется нашими ',
       terms: 'Условиями обслуживания',
       between: ' и ',
       privacy: 'Политикой конфиденциальности',

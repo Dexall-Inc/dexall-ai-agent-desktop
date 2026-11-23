@@ -144,10 +144,16 @@ class CLIInfoMixin:
                 self._console_print(line)
 
     def show_banner(self):
-        """Display the welcome banner in Claude Code style."""
+        """CLI 起動画面を表示する。"""
         from cli import _build_compact_banner, get_tool_definitions, logger
         from hermes_cli.banner import build_welcome_banner
+        from hermes_cli.skin_engine import get_active_skin
+
         self.console.clear()
+        if get_active_skin().name == "default":
+            from hermes_cli.tact_banner import animate_startup
+
+            animate_startup(self.console)
         store, gateway_inventory, ctx_len, banner_kw = banner_plan(self, self.console)
         on_gateway = store is not None  # its tools come from the gateway: never enumerated here
 

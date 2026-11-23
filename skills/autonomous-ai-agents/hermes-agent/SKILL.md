@@ -1,6 +1,6 @@
 ---
 name: hermes-agent
-description: "Use, configure, theme, extend, and orchestrate Hermes Agent."
+description: "TACT の使い方、設定、テーマ、拡張、運用を案内する."
 version: 3.3.0
 author: Hermes Agent + Teknium
 license: MIT

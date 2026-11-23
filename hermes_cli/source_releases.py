@@ -15,6 +15,8 @@ from hermes_cli.update_channel import STABLE_TAG_RE, is_canary_tag
 logger = logging.getLogger(__name__)
 _PUBLIC_BASE = "https://hermes-assets.nousresearch.com"
 OFFICIAL_REPOSITORY = "NousResearch/hermes-agent"
+DEXALL_REPOSITORY = "Dexall-Inc/dexall-ai-agent"
+DEXALL_BRANCH = "develop"
 _GITHUB_ORIGIN = re.compile(
     r"^(?:https://github\.com/|git@github\.com:|ssh://git@github\.com/)"
     r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$", re.IGNORECASE,
@@ -36,7 +38,7 @@ def source_repository(git_cmd=None, cwd=None) -> str:
         match = _GITHUB_ORIGIN.fullmatch(result.stdout.strip())
         if result.returncode == 0 and match:
             return match[1]
-    return OFFICIAL_REPOSITORY
+    return DEXALL_REPOSITORY
 
 
 @dataclass(frozen=True)
@@ -152,7 +154,8 @@ def _resolve_source_target(channel: str, git_cmd=None, cwd=None, *, repository=N
         # main IS the git branch. No R2 record is read: none was ever published, and a
         # network that answers it with 403 instead of 404 (regional WAFs) must not stop
         # an install from following the branch it is on.
-        return SourceTarget(channel, channel, repository, branch="main")
+        branch = DEXALL_BRANCH if repository.casefold() == DEXALL_REPOSITORY.casefold() else "main"
+        return SourceTarget(channel, channel, repository, branch=branch)
     resolved = _resolve_channel(channel, repository)
     terminal = resolved.terminal
     if terminal["repository"].lower() != repository.lower():

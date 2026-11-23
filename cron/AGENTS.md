@@ -1,175 +1,76 @@
-# cron/ (+ kanban) — scheduled jobs and the multi-agent work queue
+# cron/ (+ kanban) — スケジュールジョブとマルチエージェント作業キュー
 
-Applies on top of the root `AGENTS.md`. Long-form: `website/docs/developer-guide/cron-internals.md`;
-user docs `website/docs/user-guide/features/cron.md`, `kanban.md`.
+ルートの `AGENTS.md` の上に適用されます。詳細版: `website/docs/developer-guide/cron-internals.md`。
+ユーザードキュメント: `website/docs/user-guide/features/cron.md`、`kanban.md`。
 
 ## Cron
 
-`cron/jobs.py` (job store) + `cron/scheduler.py` (tick loop; `scheduler_*.py` siblings). Agents
-schedule via the `cronjob` tool; users via `hermes cron list|add|edit|pause|resume|run|remove` or
-`/cron`. Schedules: duration (`"30m"`, `"2h"`, `"1d"`), "every" phrase (`"every 2h"`, `"every monday
-9am"`), 5-field cron (`"0 9 * * *"`), ISO one-shot (`"2026-06-01T09:00:00Z"`). Per-job fields:
-`skills`, `model`/`provider` overrides, `script` (pre-run data-collection script whose stdout is
-injected into the prompt; `no_agent=True` makes the script the whole job; always a FILE under
-`HERMES_HOME/scripts/`, never a command line — `script='echo hi'` is refused at creation), `context_from` (chain job
-A's last output into job B's prompt), `workdir` (run with that directory's `AGENTS.md`/`CLAUDE.md`
-loaded), `timezone` (pin the cron expression's wall clock to an IANA zone; absent = the profile's
-zone), `grace_minutes` (override the catch-up window; `0` = never catch up, cron only),
-multi-platform delivery.
+`cron/jobs.py`（ジョブストア）+ `cron/scheduler.py`（ティックループ。`scheduler_*.py` はその兄弟）。エージェントは `cronjob` ツールでスケジュールし、ユーザーは `hermes cron list|add|edit|pause|resume|run|remove` または `/cron` で行います。スケジュール形式: 継続時間（`"30m"`、`"2h"`、`"1d"`）、「every」フレーズ（`"every 2h"`、`"every monday
+9am"`）、5フィールドの cron（`"0 9 * * *"`）、ISO の単発指定（`"2026-06-01T09:00:00Z"`）。ジョブごとのフィールド: `skills`、`model`/`provider` の上書き、`script`（実行前のデータ収集スクリプト。その標準出力がプロンプトに注入されます。`no_agent=True` によりスクリプトがジョブ全体になります。常に `HERMES_HOME/scripts/` 配下の FILE であり、コマンドラインではありません。`script='echo hi'` は作成時に拒否されます）、`context_from`（ジョブ A の最後の出力をジョブ B のプロンプトに連結）、`workdir`（そのディレクトリの `AGENTS.md`/`CLAUDE.md` を読み込んで実行）、`timezone`（cron 式の壁時計を IANA タイムゾーンに固定。未指定ならプロフィールのタイムゾーン）、`grace_minutes`（キャッチアップウィンドウの上書き。`0` はキャッチアップなし、cron のみ）、マルチプラットフォーム配信。
 
-Hardening invariants — each guards a real failure; don't weaken without answering for it:
-- **Inactivity watchdog** on cron agent sessions (`_cron_inactivity_seconds()`): default 600s idle,
-  `HERMES_CRON_TIMEOUT` overrides, `0` = unlimited. It is idle time, not wall-clock — a stalled
-  session is hard-interrupted so it cannot monopolise the scheduler, while a long-but-active job
-  is never cut off. Attached scripts (pre-run or `no_agent`) are bounded separately by the script
-  timeout (`_DEFAULT_SCRIPT_TIMEOUT`, 3600s).
-- Catch-up window = half the period, clamped to 120s–2h, or the job's `grace_minutes` when set
-  (`0` = never catch up — a real value, never "unset": `0 == False`); 120s grace for missed
-  one-shots.
-- **A pinned `timezone` owns the whole path, not just the compute.** `compute_next_run` resolves
-  *job pin → profile zone*, and every `next_run_at` write site must pass the pin (`cron/jobs.py`
-  call sites, `quota_hold.plan_hold`, `unreachable_retry.will_retry`, `extra_fire.settle`); one missed site is a burst
-  re-run or a skipped slot. `_evaluate_due_job` normalizes the stored instant into the JOB's zone
-  and **skips `_repair_timezone_shifted_cron`** for pinned jobs — that repair is for jobs that
-  follow the profile zone, and on a pinned job its wall-clock predicate reads a due occurrence as
-  future and re-anchors past it (job silently never fires). Knobs live in `cron/jobs_time.py`;
-  `timezone`/`grace_minutes` must stay in `job_definition.JOB_DEFINITION_FIELDS` or a profile
-  distribution strips them.
-- Every recurring occurrence is accounted for: `tick()` advances `next_run_at` BEFORE dispatch
-  (at-most-once across a mid-run crash) and stamps `pending_slot` in the same save; a scan that
-  finds the stamp with a dead owner restores the instant ONCE (`cron/occurrences.py`), the
-  executions ledger's `scheduled_instant` blocks a second fire, `cron.catch_up_missed: false`
-  skips past-grace misses with a logged reason. Never drop a slot silently (#107485).
-- Per-home tick lock `<home>/cron/.tick.lock` prevents duplicate ticks across processes for
-  that profile's store; never a `~/.hermes/...` literal.
-- **Headless ticks refuse, never spawn.** `hermes cron tick` (system crontab / external scheduler)
-  calls `tick(headless=True)`; `cron/scheduler_gateway_gate.py` skips agent jobs when discovery
-  says no gateway owns the home (`last_fire_error` stamped, one warning per tick, due instant
-  untouched) instead of letting `run_canonical_job → connect_gateway → ensure_gateway_runtime`
-  spawn an unmanaged daemon. Same policy as approvals (headless/cron = refuse). The in-process
-  ticker and `hermes cron run` are not headless.
-- **The ticker binds each served profile's scope for the whole tick, including pre-loop code.**
-  `scheduler_provider.py::_start_multiplex` is ONE ticker iterating `profiles_to_serve()`
-  sequentially under `_profile_cron_scope(home)` (home + secret scope + terminal scope) — never N
-  threads (module globals race). Everything a tick touches lives inside that guard: store open,
-  lock path, backoff/failure counters (`_note_tick_failure`), job env construction, and the
-  `on_session_end` flush of a finished job. Supervision (`scheduler_thread.py::
-  SupervisedTickerThread`; start on gateway boot, stand down for homes another gateway already
-  serves, re-enumerate when a profile dir appears or is tombstoned) is per served home, not per
-  process. Why: a store opened before the scope was entered wrote a secondary profile's run
-  records into the launch profile's `jobs.json`.
-- **Cron ownership is not gated on `gateway.multiplex_profiles`.** That flag gates ADAPTERS; one
-  host gateway process ticks EVERY profile's store either way (`run.py::_cron_tick_profile_homes`).
-  Gating the tick set on it left every non-launch profile's jobs in a store no ticker visited.
-- **Per-profile process assumptions are the bug class.** One process ticks N homes, so anything
-  keyed on "this process's profile" is wrong: in-flight state (`_running_job_ids`,
-  `_running_since`, `_running_futures`, `_running_worker_pids`, `_running_fire_owners`,
-  `_interrupted_job_ids`) is keyed by `_inflight_key(job_id)` = `(home key, job id)` — two
-  profiles legitimately carry a `daily-brief`; the parallel pool is keyed by home
-  (`cron.max_parallel_jobs` is per profile); and the stale-code yield gate asks
-  `scheduler_ownership.owns_cron_tick_for(home)` / `live_gateway_ticking(home)` instead of the
-  process-global runtime-lock boolean. Public accessors (`get_running_job_ids`,
-  `get_running_job_details`, `get_wedged_job_ids`) still report the host-wide union of bare job
-  ids for the shutdown drain, but LIVENESS consumers (`jobs.py::_job_running_in_this_process`,
-  `tools/cronjob_tools`) ask `is_job_running(job_id, home=...)` — the union made profile A's
-  running `daily-brief` answer for profile B's idle one.
-- **A claim is released under the key it was registered with.** The cron scope is a ContextVar:
-  `try_register_running_job` runs on the ticker thread inside `_profile_cron_scope`, while the
-  pool worker's `finally` sits OUTSIDE `ctx.run` and resolves the LAUNCH home. Pass the
-  registering home (`release_running_job(job_id, home=...)`), or every secondary profile's claim
-  leaks — the job skips a fire window until the force-release backstop sweeps it, and the drain
-  sees phantom work. Never rebuild a home from a key half (`Path(key[0])`): `hermes_home_key`
-  normcases, so use `_inflight_home_path`.
-- **Ticked-home state is reclaimed when a home leaves the set.** `register_ticked_homes` is
-  republished every cycle and reaps the departed homes' parallel pools; pools used to live until
-  `atexit`, so each home ever ticked kept a ThreadPoolExecutor and its worker threads forever.
-- **The host gateway stands down for a profile that runs its OWN gateway.** `run.py::
-  _cron_profile_gate` (the same gate `hermes_cli/web_server.py` passes) keeps the launch process
-  and a per-profile gateway off one store: the tick lock stops a simultaneous double-run but not
-  the race, and when the launch process wins, delivery goes through `SharedRouteAdapters`/
-  fail-closed instead of that profile's live adapters. The gate compares the liveness PID against
-  `os.getpid()` — this process holds the launch `gateway.pid` AND publishes every served profile
-  in `served_profiles`, so a bare liveness answer would stand cron down host-wide.
-- **The restart-safe external worker boots itself.** `_launch_external_cron_worker` pins the
-  checkout — and, on a PM install, the committed generation's `site-packages` — on the child's
-  `PYTHONPATH` and marks it `_HERMES_CRON_WORKER_BOOT`; the child's package entry
-  (`cron/__init__.py` → `cron/worker_bootstrap.py`, ahead of the `cron.jobs` import — `-m
-  cron.scheduler` runs the package first) then runs PM's `activate_dependencies`, which
-  leases the committed generation for the worker's lifetime, runs its `.pth` files and
-  activates it before the first third-party import. A failed activation is fatal: the worker
-  exits before its ownership ack (a reported dispatch failure) rather than run on an unleased
-  generation the collector may delete. The gateway never re-runs the boot — `hermes_bootstrap`
-  already did at its own launch (#122222). The worker's `__main__` imports `hermes_bootstrap`
-  (`finish_worker_boot`) and runs `run_agent`'s interrupted-pull recovery before it reads the
-  payload, and only then drops the marker: a source-update relaunch (`-I`, no `PYTHONPATH`) or a
-  post-restore re-exec must replay the whole worker, never land after the ack with the payload
-  gone and no dependency boot.
-- Cron sessions pass `skip_memory=True`; memory providers intentionally do not run during cron.
-- Cron execution has its own session. Eligible continuable deliveries may mirror or seed the
-  reply-facing conversation: origin, origin-less home fallback, user-written bare-platform home,
-  or opted-in explicit targets. `all` expansions do not gain home mirror eligibility. Mirrored
-  briefs are labelled user turns appended at a turn boundary, preserving role alternation.
-- The cron ticker runs in the desktop-spawned backend when `HERMES_DESKTOP=1` — that env var means
-  "spawned by the app", not "a GUI is watching" (root: capability is a property of the session).
-- Background `delegate_task` is process-local; work that must survive restarts is a cron job or a
-  `terminal(background=True, notify_on_complete=True)` process.
+堅牢化の不変条件 — それぞれが実際の障害を防いでいる。弱めるときは、それに応える責任を負うこと:
 
-## Kanban (multi-agent work queue)
+- **非アクティブ監視** (cron エージェントセッション、`_cron_inactivity_seconds()`): デフォルトはアイドル 600 秒。`HERMES_CRON_TIMEOUT` で上書き、`0` で無制限。これは経過時間ではなくアイドル時間である — 停止したセッションは強制割り込みされ、スケジューラを独占できない。一方、長くても稼働中のジョブが打ち切られることはない。付随スクリプト (pre-run または `no_agent`) は、スクリプトのタイムアウト (`_DEFAULT_SCRIPT_TIMEOUT`、3600 秒) によって別途制限される。
+- キャッチアップ窓 = 期間の半分で、120 秒〜2 時間にクランプされる。設定されている場合はジョブの `grace_minutes` が優先される (`0` = キャッチアップしない — これは実際の値であり、「未設定」ではない: `0 == False`)。見逃したワンショットには 120 秒の猶予。
+- **固定された `timezone` は計算だけでなくパス全体を所有する。** `compute_next_run` は *ジョブのピン → プロファイルゾーン* を解決し、すべての `next_run_at` 書き込み箇所はピンを渡さなければならない (`cron/jobs.py` 呼び出し箇所、`quota_hold.plan_hold`、`unreachable_retry.will_retry`、`extra_fire.settle`)。1 箇所でも見逃すと、バーストの再実行またはスロットのスキップになる。`_evaluate_due_job` は保存されたインスタントをジョブのゾーンに正規化し、固定ジョブでは `_repair_timezone_shifted_cron` を**スキップ**する — その修復はプロファイルゾーンに従うジョブのためのものであり、固定ジョブではその壁時計述語が到来した発生を未来として読み取り、それを過ぎて再アンカーする (ジョブは静かに発火しない)。ノブは `cron/jobs_time.py` にあり、`timezone`/`grace_minutes` は `job_definition.JOB_DEFINITION_FIELDS` に留まらなければならない。さもなければプロファイル配布がそれらを剥ぎ取る。
+- すべての再発事象が計上される。`tick()` はディスパッチの**前**に `next_run_at` を進める（実行途中のクラッシュをまたいでも at-most-once を保証）とともに、同じ保存内で `pending_slot` を刻印する。刻印を発見しつつオーナーが死んでいるスキャンは、ONCE の即時復元（`cron/occurrences.py`）を行い、実行台帳の `scheduled_instant` が2回目の発火をブロックし、`cron.catch_up_missed: false` は猶予期間を過ぎたミスをログ付きの理由でスキップする。スロットを黙って落とすことは決してしない（#107485）。
+- プロファイル単位のティックロック `<home>/cron/.tick.lock` は、そのプロファイルのストアについてプロセス間での重複ティックを防ぐ。`~/.hermes/...` リテラルは決して使わない。
+- **ヘッドレスのティックは拒否し、決して起動しない。** `hermes cron tick`（システム crontab / 外部スケジューラ）は `tick(headless=True)` を呼び出し、`cron/scheduler_gateway_gate.py` は、ディスカバリがそのホームを所有するゲートウェイなしと判断した場合（`last_fire_error` を刻印、ティックごとに1回の警告、期限到来分には触れない）に、`run_canonical_job → connect_gateway → ensure_gateway_runtime` が管理外のデーモンを起動するのを許さず、エージェントジョブをスキップする。承認と同じ方針（ヘッドレス / cron = 拒否）。プロセス内ティッカーと `hermes cron run` はヘッドレスではない。
+- **ティッカーは、ティック全体（ループ前のコードを含む）にわたって、提供される各プロファイルのスコープをバインドします。**
+  `scheduler_provider.py::_start_multiplex` は `profiles_to_serve()` を `_profile_cron_scope(home)`（ホーム＋シークレットスコープ＋ターミナルスコープ）の下で順次反復する **1つの** ティッカーであり、N 個のスレッドではありません（モジュールグローバルが競合します）。ティックが触れるすべてのものはそのガード内に存在します：ストアのオープン、ロックパス、バックオフ／失敗カウンタ（`_note_tick_failure`）、ジョブ環境の構築、完了ジョブの `on_session_end` フラッシュ。監視（`scheduler_thread.py::
+  SupervisedTickerThread`；ゲートウェイ起動時に開始し、別のゲートウェイが既に提供しているホームでは待機し、プロファイルディレクトリが出現またはトゥームストーン化されたときに再列挙）はプロセス単位ではなく、提供されるホームごとに行われます。理由：スコープに入る前にオープンされたストアが、起動プロファイルの `jobs.json` にセカンダリプロファイルの実行レコードを書き込んでいました。
+- **Cron の所有権は `gateway.multiplex_profiles` にゲートされません。** そのフラグはアダプタをゲートします。どちらの場合でも、1つのホストゲートウェイプロセスがすべてのプロファイルのストアをティックします（`run.py::_cron_tick_profile_homes`）。ティックセットをそれにゲートすると、ティッカーが訪問しないストアに、起動プロファイル以外のすべてのプロファイルのジョブが残されていました。
+- **プロファイル単位のプロセス前提がバグの温床である。** 1つのプロセスがN個のホームを刻むため、「このプロセスのプロファイル」を基準にしたものはすべて誤りとなる。すなわち、進行中状態（`_running_job_ids`、`_running_since`、`_running_futures`、`_running_worker_pids`、`_running_fire_owners`、`_interrupted_job_ids`）は`_inflight_key(job_id)` = `(home key, job id)`をキーとしており、2つのプロファイルが正当に`daily-brief`を保持し得る。並列プールはホームをキーとする（`cron.max_parallel_jobs`はプロファイル単位）。また、古いコードのyieldゲートは、プロセス全体のランタイムロック真偽値ではなく`scheduler_ownership.owns_cron_tick_for(home)` / `live_gateway_ticking(home)`を問い合わせる。公開アクセサ（`get_running_job_ids`、`get_running_job_details`、`get_wedged_job_ids`）は、シャットダウンドレイン用にホスト全体のベアジョブIDの和集合を依然として報告するが、LIVENESSの消費者（`jobs.py::_job_running_in_this_process`、`tools/cronjob_tools`）は`is_job_running(job_id, home=...)`を問い合わせる。この和集合により、プロファイルAで実行中の`daily-brief`が、プロファイルBのアイドル状態のものに対する応答を担ってしまう。
+- **クレームは、登録されたキーで解放される。** cronスコープはContextVarである。`try_register_running_job`は`_profile_cron_scope`内のティッカースレッド上で実行される一方、プールワーカーの`finally`は`ctx.run`の外側にあり、LAUNCHホームを解決する。登録元のホーム（`release_running_job(job_id, home=...)`）を渡さないと、すべてのセカンダリプロファイルのクレームが漏れる。ジョブは、強制解放のバックストップがそれを掃除するまで発火ウィンドウをスキップし、ドレインは幽霊のような作業を目にする。キーの半分からホームを再構築してはならない（`Path(key[0])`）。`hermes_home_key`は正規化を行うため、`_inflight_home_path`を使うこと。
+- **ティックされたホームの状態は、ホームがセットから外れると回収される。** `register_ticked_homes`は毎サイクル再公開され、離脱したホームのパラレルプールを刈り取る。プールはかつて`atexit`まで存続していたため、ティックされた各ホームはThreadPoolExecutorとそのワーカースレッドを永久に保持していた。
+- **ホストゲートウェイは、自身のゲートウェイを実行するプロファイルに対して待機状態になる。** `run.py::
+  _cron_profile_gate`（`hermes_cli/web_server.py`が通過するのと同じゲート）は、起動プロセスとプロファイルごとのゲートウェイを1つのストア上に保つ。ティックロックは同時二重実行を防ぐが、競合は防げない。起動プロセスが勝った場合、配信はそのプロファイルのライブアダプタではなく`SharedRouteAdapters`/フェイルクローズ経由で行われる。ゲートはliveness PIDを`os.getpid()`と比較する。このプロセスは起動用の`gateway.pid`を保持し、かつ提供されるすべてのプロファイルを`served_profiles`に公開するため、素のliveness応答ではホスト全体でcronを停止させてしまう。
+- **再起動に耐える外部ワーカーは自らを起動する。** `_launch_external_cron_worker` はチェックアウトを固定し、PM インストール時にはコミット済み世代の `site-packages` も子の `PYTHONPATH` 上で固定して `_HERMES_CRON_WORKER_BOOT` とマークする。子のパッケージエントリ（`cron/__init__.py` → `cron/worker_bootstrap.py`。`cron.jobs` インポートより前 — `-m
+  cron.scheduler` が先にパッケージを実行する）は、その後 PM の `activate_dependencies` を実行する。これはコミット済み世代をワーカーの存続期間にわたってリースし、その `.pth` ファイルを実行し、最初のサードパーティ製インポートより前にそれを有効化する。有効化の失敗は致命的である。ワーカーは所有権の ack の前に終了する（報告されたディスパッチ失敗）が、コレクタが削除し得る未リース世代上で実行されることはない。ゲートウェイはブートを再実行しない — `hermes_bootstrap` が自らの起動時にすでに実行している（#122222）。ワーカーの `__main__` は `hermes_bootstrap`（`finish_worker_boot`）をインポートし、ペイロードを読み取る前に `run_agent` の中断プル復旧を実行し、その後にのみマーカーを落とす。ソース更新による再起動（`-I`、`PYTHONPATH` なし）または復元後の再実行は、ワーカー全体を再生しなければならず、ペイロードが消え依存関係のブートもない状態で ack の後に着地してはならない。
+- Cron セッションは `skip_memory=True` を渡す。メモリプロバイダは cron 中には意図的に実行されない。
+- Cron実行には専用のセッションがあります。継続可能な配信は、返信向けの会話をミラーリングまたはシードすることができます。オリジン、オリジンなしのホームフォールバック、ユーザー作成のベアプラットフォームホーム、またはオプトインした明示的なターゲットです。`all`の展開はホームミラーリングの対象になりません。ミラーリングされたブリーフは、ターン境界で追加されるユーザーターンとしてラベル付けされ、ロールの交互を維持します。
+- cronティッカーは、`HERMES_DESKTOP=1`のときにデスクトップ起動のバックエンドで実行されます。この環境変数は「アプリによって起動された」ことを意味し、「GUIが監視している」ことを意味するものではありません（ルート: 機能はセッションのプロパティです）。
+- バックグラウンドの`delegate_task`はプロセスローカルです。再起動後も存続する必要がある処理は、cronジョブまたは`terminal(background=True, notify_on_complete=True)`プロセスです。
 
-Durable SQLite-backed board letting multiple profiles/workers collaborate. Users: `hermes kanban
-<verb>`; dispatcher-spawned workers use a dedicated `kanban_*` toolset so their schema footprint is
-zero outside a kanban task (footprint ladder rung 3).
+## カンバン（マルチエージェント作業キュー）
 
-- **CLI:** `hermes_cli/kanban.py` facade + 14 `kanban_*.py` siblings (`boards`, `db`, `db_connect`,
-  `db_dispatch`, `db_notify`, `db_graph` (task initialization and decomposition), `workspace`, ...). Verbs: `init, create, list (ls), show, assign, link,
+複数のプロフィール／ワーカーが協働できる、SQLiteに永続化されたボード。ユーザー: `hermes kanban
+<verb>`。ディスパッチャーが生成したワーカーは専用の`kanban_*`ツールセットを使用するため、カンバンタスクの外ではスキーマのフットプリントがゼロになる（フットプリントラダーの段階3）。
+
+- **CLI:** `hermes_cli/kanban.py` ファサード + 14 個の `kanban_*.py` 兄弟（`boards`、`db`、`db_connect`、
+  `db_dispatch`、`db_notify`、`db_graph`（タスク初期化と分解）、`workspace`、...）。動詞: `init, create, list (ls), show, assign, link,
   unlink, comment, attach, attachments, attach-rm, complete, request-review, request-changes,
-  reopen-review, block, unblock, archive, tail`, plus `watch, stats, runs, log, assignees, heartbeat,
-  notify-*, dispatch, daemon, gc`. Argparse alias dispatch must accept both `list` and `ls` (root).
-- **Toolset:** `tools/kanban_tools.py` — `kanban_show, kanban_complete, kanban_request_review,
+  reopen-review, block, unblock, archive, tail`、および `watch, stats, runs, log, assignees, heartbeat,
+  notify-*, dispatch, daemon, gc`。Argparse のエイリアスディスパッチは `list` と `ls`（ルート）の両方を受け付ける必要があります。
+- **ツールセット:** `tools/kanban_tools.py` — `kanban_show, kanban_complete, kanban_request_review,
   kanban_request_changes, kanban_block, kanban_schedule, kanban_heartbeat, kanban_comment,
   kanban_create, kanban_link,
-  kanban_attach, kanban_attach_url, kanban_attachments`; platforms whose saved selection enables
-  `kanban` (`hermes tools enable kanban --platform <p>`; default-off, in `CONFIGURABLE_TOOLSETS`) get
-  the full set plus `kanban_list`/`kanban_unblock` for board routing. The check_fn reads the schema
-  build's own selection (`tools/kanban_toolset_context.py`), never the legacy top-level `toolsets`
-  key alone.
-- **Dispatcher:** long-lived loop (default 60s) that reclaims stale claims, promotes ready tasks,
-  atomically claims, and spawns assigned profiles. Runs **inside the gateway** by default
-  (`kanban.dispatch_in_gateway: true`). Standalone: `plugins/kanban/systemd/hermes-kanban-dispatcher.service`.
-- **Plugin assets:** `plugins/kanban/dashboard/` (web UI) + systemd unit. `kanban_db.connect` is its
-  own connection helper — do not alias it to `projects_db.connect` (a path-proximity generator did).
+  kanban_attach, kanban_attach_url, kanban_attachments`;保存された選択が `kanban` を有効にするプラットフォーム（`hermes tools enable kanban --platform <p>`;デフォルトオフ、`CONFIGURABLE_TOOLSETS` 内）は、ボードルーティング用の `kanban_list`/`kanban_unblock` に加えてフルセットを取得します。check_fn はスキーマビルド自身の選択（`tools/kanban_toolset_context.py`）を読み取り、レガシーのトップレベル `toolsets` キーだけを読み取りません。
+- **ディスパッチャ:** 期限切れのクレームを回収し、準備完了タスクを昇格し、アトミックにクレームし、割り当てられたプロファイルを起動する常駐ループ（デフォルト 60 秒）。デフォルトでは**ゲートウェイ内**で実行されます（`kanban.dispatch_in_gateway: true`）。スタンドアロン: `plugins/kanban/systemd/hermes-kanban-dispatcher.service`。
+- **プラグインアセット:** `plugins/kanban/dashboard/`（Web UI）+ systemd ユニット。`kanban_db.connect` はそれ自体の接続ヘルパーです — `projects_db.connect`（パス近接ジェネレーターが行った）にエイリアスしないでください。
 
-Isolation: **board** is the hard boundary — workers get `HERMES_KANBAN_BOARD` pinned in their env and
-cannot see other boards; **tenant** is a soft namespace within a board (workspace-path + memory-key
-isolation, one fleet serving several businesses). After `kanban.failure_limit` consecutive
-non-success attempts on a task (default 2) the dispatcher auto-blocks it to stop spin loops; a
-worker exit of `KANBAN_TERMINAL_PROVIDER_EXIT_CODE` (78 — credential revoked, model gone; the
-worker's own `failure_reason` classification via `cli._TERMINAL_PROVIDER_REASONS`) trips it on
-the first attempt, sticky, because no retry can heal it (#114587).
-Process-identity note: `kanban --preserve-cache` contains "serve" — never classify processes by argv
-substring (root). Worker liveness is `(worker_pid, worker_started_at)` — the start-time fingerprint
-(`gateway.status.get_process_start_time`) recorded at claim time — never bare PID existence, or a
-recycled PID gets killed on reclaim.
+隔離: **board** はハードな境界です — ワーカーは環境に `HERMES_KANBAN_BOARD` が固定され、他の board を見ることはできません。**tenant** は board 内のソフトな名前空間です (ワークスペースパス + メモリキーによる分離で、1つのフリートが複数のビジネスにサービスを提供します)。タスクに対する連続した非成功試行が `kanban.failure_limit` 回 (デフォルト 2) に達すると、ディスパッチャはスピンループを止めるためにそのタスクを自動的にブロックします。ワーカーの終了コード `KANBAN_TERMINAL_PROVIDER_EXIT_CODE` (78 — 資格情報の失効、モデルの消滅。ワーカー自身の `failure_reason` による `cli._TERMINAL_PROVIDER_REASONS` 経由の分類) は、最初の試行でそれをトリガーし、スティッキーに保持されます。なぜなら、いかなる再試行でもそれを回復できないからです (#114587)。
 
-- **Notifications leave through the task's owning profile.** `hermes_cli/kanban_db_notify.py`
-  subscriptions carry the profile; `gateway/kanban_watchers_notifier.py` delivers via THAT
-  profile's adapter under its scope (`_notify_profile_filter`), never the multiplexer's launch
-  adapter; a fail-closed skip logs once at WARNING with the remedy, never a bare `continue`.
-  Dispatched workers get `HERMES_KANBAN_BOARD` and the assignee's `HERMES_HOME` pinned in a
-  scrubbed child env (`build_subprocess_env` + `strip_launch_profile_env`); they never inherit the
-  default profile's `.env`.
-- **Prompt injection sites gate on ownership, not tool access.** Tool access (`kanban_show` visible
-  via a profile's toolset) and an inherited `HERMES_KANBAN_TASK` (delegate children, cron runs beside
-  a worker) are not ownership. The kanban guidance (`agent_init`, `system_prompt` fallback) and the
-  stop nudge resolve the task via `agent/delegation_context.py::owned_kanban_task()`; other readers
-  pair their env read with `is_dispatcher_owned_worker_context()`.
-- **Descendant fence is a path, not a flag.** A delegated child's Kanban marker
-  (`agent/delegation_context.py::DELEGATED_CHILD_ENV_MARKER`) carries the fenced board ROOT;
-  `kanban_path_is_fenced(path)` denies mutations only on the dispatcher-pinned `HERMES_KANBAN_DB`
-  or under that root, so a child working against a scratch `HERMES_HOME` keeps a writable board.
+プロセス識別に関する注意: `kanban --preserve-cache` には "serve" が含まれます — argv の部分文字列でプロセスを分類しないでください (root)。ワーカーの生存確認は `(worker_pid, worker_started_at)` です — クレーム時に記録された開始時刻フィンガープリント (`gateway.status.get_process_start_time`) であり、単なる PID の存在ではありません。そうしないと、再利用された PID がリクレーム時に強制終了されてしまいます。
 
-## Tests
+- **通知はタスクを所有するプロフィールを通じて送信される。** `hermes_cli/kanban_db_notify.py`
+  サブスクリプションはプロフィールを保持し、`gateway/kanban_watchers_notifier.py` はその
+  プロフィールのアダプターを通じて、そのスコープ（`_notify_profile_filter`）の下で配信される。マルチプレクサーの起動
+  アダプター経由ではない。フェイルクローズのスキップは WARNING で一度だけログに記録され、対処法が示される。単なる `continue` ではない。
+  ディスパッチされたワーカーには `HERMES_KANBAN_BOARD` と、割り当て先の `HERMES_HOME` が
+  サニタイズされた子環境（`build_subprocess_env` + `strip_launch_profile_env`）に固定される。デフォルト
+  プロフィールの `.env` を継承することはない。
+- **プロンプトインジェクションの発生箇所は、ツールアクセスではなく所有権でゲートされる。** ツールアクセス（プロフィールのツールセットで見える `kanban_show`）と
+  継承された `HERMES_KANBAN_TASK`（委譲された子、ワーカーの隣で実行される cron 実行）は
+  所有権ではない。カンバンのガイダンス（`agent_init`、`system_prompt` フォールバック）と
+  停止のナッジは `agent/delegation_context.py::owned_kanban_task()` を介してタスクを解決する。他のリーダーは
+  環境の読み取りを `is_dispatcher_owned_worker_context()` と組み合わせる。
+- **子孫フェンスはフラグではなくパスである。** 委譲された子のカンバンマーカー
+  （`agent/delegation_context.py::DELEGATED_CHILD_ENV_MARKER`）はフェンスされたボードの ROOT を保持する。
+  `kanban_path_is_fenced(path)` は、ディスパッチャーが固定した `HERMES_KANBAN_DB` 上、または
+  そのルート配下でのみ変更を拒否する。したがって、スクラッチの `HERMES_HOME` に対して作業する子は
+  書き込み可能なボードを維持する。
 
-`tests/cron/`, `tests/hermes_cli/test_kanban*.py`, `tests/tools/test_kanban*.py`. Schedule parsing
-and catch-up windows are pure functions — test them as data. Never assert on the verb list or
-toolset size (root: no change-detectors). Time-based tests use loose bounds (≥ 2s) and event sync.
+## テスト
+
+`tests/cron/`、`tests/hermes_cli/test_kanban*.py`、`tests/tools/test_kanban*.py`。スケジュール解析とキャッチアップウィンドウは純粋関数です。データとしてテストしてください。動詞リストやツールセットのサイズをアサートしないでください（root: 変更検出器なし）。時間ベースのテストでは緩い境界（≥ 2秒）とイベント同期を使用してください。

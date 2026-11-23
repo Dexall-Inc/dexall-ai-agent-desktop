@@ -55,63 +55,51 @@ def _add_compat_platform_flag(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_system_flag(parser: argparse.ArgumentParser) -> None:
-    _flag(parser, "--system", help="Target the Linux system-level gateway service")
+    _flag(parser, "--system", help="Linuxシステムレベルのゲートウェイサービスを対象にする")
 
 
 def build_gateway_parser(
     subparsers, *, cmd_gateway: Callable, cmd_proxy: Callable, cmd_gateway_enroll: Callable
 ) -> None:
     """Attach the ``gateway`` and ``proxy`` subcommands to ``subparsers``."""
-    gateway_parser = subparsers.add_parser("gateway", help="Messaging gateway management",
-        description="Manage the messaging gateway (Telegram, Discord, WhatsApp, Weixin, and more)")
+    gateway_parser = subparsers.add_parser("gateway", help="メッセージングゲートウェイの管理",
+        description="メッセージングゲートウェイ（Telegram、Discord、WhatsApp、Weixinなど）を管理する")
     gateway_subparsers = gateway_parser.add_subparsers(
         dest="gateway_command", parser_class=_GatewayCommandParser)
 
     gateway_run = gateway_subparsers.add_parser(
-        "run", help="Run gateway in foreground (recommended for WSL and Docker)"
+        "run", help="ゲートウェイをフォアグラウンドで実行する（WSLとDockerに推奨）"
     )
     gateway_run.add_argument(
         "-v",
         "--verbose",
         action="count",
         default=0,
-        help="Increase stderr log verbosity (-v=INFO, -vv=DEBUG)",
+        help="stderrログの詳細度を上げる（-v=INFO、-vv=DEBUG）",
     )
     gateway_run.add_argument(
-        "-q", "--quiet", action="store_true", help="Suppress all stderr log output"
+        "-q", "--quiet", action="store_true", help="すべてのstderrログ出力を抑制する"
     )
     gateway_run.add_argument(
         "--replace",
         action="store_true",
-        help="Replace any existing gateway instance (useful for systemd)",
+        help="既存のゲートウェイインスタンスを置き換える（systemdに便利）",
     )
     gateway_run.add_argument(
         "--force",
         action="store_true",
         help=(
-            "Start a foreground gateway even when a systemd/launchd/s6 service "
-            "already supervises this profile. Without --force, the command "
-            "refuses because a second dispatcher escapes the service and can "
-            "corrupt shared gateway state."
+            "systemd/launchd/s6サービスがすでにこのプロファイルを監視している場合でも、フォアグラウンドゲートウェイを起動する。--forceがない場合、2番目のディスパッチャがサービスから逃げ出して共有ゲートウェイ状態を破損する可能性があるため、コマンドは拒否される。"
         ),
     )
     gateway_run.add_argument(
         "--no-supervise",
         action="store_true",
         help=(
-            "Inside the s6-overlay Docker image, normally `gateway run` is "
-            "automatically redirected to the supervised s6 service (so the "
-            "gateway gets auto-restart on crash, plus a supervised dashboard "
-            "if HERMES_DASHBOARD is set). Pass --no-supervise to opt out and "
-            "get the historical pre-s6 foreground behavior: the gateway is "
-            "the container's main process and the container exits with the "
-            "gateway's exit code. No effect outside an s6 container."),
+            "s6-overlay Dockerイメージ内では、通常`gateway run`は監視対象のs6サービスに自動的にリダイレクトされる（これにより、ゲートウェイはクラッシュ時に自動再起動され、HERMES_DASHBOARDが設定されている場合は監視対象のダッシュボードも得られる）。--no-superviseを渡すとオプトアウトし、従来のpre-s6フォアグラウンド動作（ゲートウェイがコンテナのメインプロセスとなり、コンテナはゲートウェイの終了コードで終了する）を取得できる。s6コンテナ外では効果がない。"),
     )
     _flag(gateway_run, "--external-supervisor",
-        help="Declare that an external process manager owns this foreground "
-            "gateway. In-chat restarts and updates exit back to that manager "
-            "instead of spawning a detached replacement. Use this when a "
-            "launchd/systemd wrapper strips its native environment markers.")
+        help="外部のプロセスマネージャがこのフォアグラウンドゲートウェイを所有していることを宣言する。チャット内の再起動と更新は、切り離された置換プロセスを起動する代わりに、そのマネージャに戻って終了する。launchd/systemdラッパーがネイティブの環境マーカーを除去する場合に使用する。")
     # Internal: set only by a client that auto-starts its own gateway (chat, TUI, cron/kanban
     # clients). Never in service units, Desktop's `gateway ensure` start or a hand-run gateway.
     _flag(gateway_run, "--idle-exit", help=argparse.SUPPRESS)
@@ -121,212 +109,170 @@ def build_gateway_parser(
     from hermes_cli.gateway_runtime_cli import cmd_gateway_attach, cmd_gateway_ensure
     gateway_ensure = gateway_subparsers.add_parser(
         "ensure", json_verb="ensure",
-        help="Ensure a local runtime without installing or replacing a service",
+        help="ローカルランタイムを、サービスをインストールまたは置き換えることなく確保する",
         epilog="Exit codes: 0 ready; 2 invalid invocation; 3 incompatible; "
                "4 authorization/profile mismatch; 5 deadline; 6 draining/update-paused; "
                "7 inaccessible/conflicting supervisor. Pending startup is not readiness.")
-    _flag(gateway_ensure, "--json", help="Emit one credential-free JSON result (default)")
+    _flag(gateway_ensure, "--json", help="資格情報を含まないJSON結果を1つ出力する（デフォルト）")
     gateway_ensure.add_argument("--timeout", default="60",
-                                help="Total startup deadline in seconds (default: 60)")
+                                help="起動の合計デッドライン（秒）（デフォルト: 60）")
     gateway_ensure.set_defaults(func=cmd_gateway_ensure)
 
     gateway_attach = gateway_subparsers.add_parser(
         "attach", json_verb="attach",
-        help="Attach a local client: the gateway's WebSocket URL and a single-use session ticket",
-        description="Print the WebSocket URL of the gateway serving this profile and one single-use "
-                    "session ticket for it, for a local client that dials /api/ws itself. The ticket "
-                    "is a credential: it is printed for the calling process only, never logged, and "
-                    "expires 30 seconds after it is minted.",
+        help="ローカルクライアントを接続する：ゲートウェイのWebSocket URLと一回限りのセッションチケット",
+        description="このプロファイルにサービスを提供するゲートウェイのWebSocket URLと、それに対する一回限りのセッションチケットを出力します。これは、自身で/api/wsに接続するローカルクライアント用です。チケットは資格情報です：呼び出し元プロセスにのみ出力され、決してログに記録されず、発行から30秒後に失効します。",
         epilog="Exit codes: 0 attached; 2 invalid invocation; otherwise the exit code "
                "`hermes gateway ensure` gives the same verdict.")
-    _flag(gateway_attach, "--json", help="Emit one JSON result (default)")
+    _flag(gateway_attach, "--json", help="1件のJSON結果を出力（デフォルト）")
     attach_mode = gateway_attach.add_mutually_exclusive_group()
-    _flag(attach_mode, "--start", help="Start the gateway when none serves this profile")
+    _flag(attach_mode, "--start", help="このプロファイルを提供するゲートウェイがない場合にゲートウェイを起動")
     _flag(attach_mode, "--recover",
-        help="Discover first; start (or replace an older Hermes's) gateway only when it is not ready")
+        help="最初に検出し、ゲートウェイが準備できていない場合のみ（または古いHermesのゲートウェイを置き換えて）起動")
     gateway_attach.add_argument("--timeout", default="60",
-                                help="Start deadline in seconds for --start/--recover (default: 60)")
+                                help="--start/--recoverの起動デッドライン（秒）（デフォルト: 60）")
     gateway_attach.set_defaults(func=cmd_gateway_attach)
 
     from hermes_cli.gateway_runtime_tickets import cmd_gateway_tickets
     gateway_tickets = gateway_subparsers.add_parser(
         "tickets",
-        help="Mint single-use HTTP and WebSocket tickets for a client that reaches the gateway over SSH",
-        description="For a client that forwards the gateway's loopback port (for example over SSH) and "
-                    "calls its HTTP API. --probe prints what this host can mint and touches no gateway. "
-                    "--serve prints a hello line with the running gateway's endpoint, then answers each "
-                    'stdin line {"id": ..., "purpose": "native-http"} with one stdout line holding a '
-                    'single-use ticket, until stdin closes. A line may add "profile": "<name>" for '
-                    'another profile the same gateway serves. Purpose "interactive" is the WebSocket\'s '
-                    "ticket for every profile that gateway serves. It never starts a gateway: use "
-                    "`hermes gateway attach --start` for that. Tickets are credentials: they are printed "
-                    "for the calling process only and never logged.",
+        help="SSH経由でゲートウェイに到達するクライアントに対して、使い捨てのHTTPおよびWebSocketチケットを発行",
+        description="ゲートウェイのループバックポートを転送するクライアント（たとえばSSH経由）向けで、そのHTTP APIを呼び出します。--probeはこのホストが発行できるものを表示し、ゲートウェイには触れません。--serveは実行中のゲートウェイのエンドポイントを含むhello行を出力し、その後、stdinの各行{\"id\": ..., \"purpose\": \"native-http\"}に対して、使い捨てチケットを保持する1つのstdout行で応答し、stdinが閉じるまで続けます。行には、同じゲートウェイが提供する別のプロファイル用に \"profile\": \"<name>\" を追加できます。目的 \"interactive\" は、そのゲートウェイが提供するすべてのプロファイルに対するWebSocketのチケットです。ゲートウェイを起動することはありません。それには`hermes gateway attach --start`を使用してください。チケットは資格情報です。呼び出し元のプロセスにのみ出力され、決してログに記録されません。",
         epilog="Exit codes: 0 probe printed, or --serve ended at stdin EOF; 2 invalid invocation; "
                "otherwise (--serve with no gateway to use) the exit code `hermes gateway ensure` "
                "gives the same verdict.")
-    _flag(gateway_tickets, "--json", help="Emit JSON lines (default)")
+    _flag(gateway_tickets, "--json", help="JSON行を出力（デフォルト）")
     tickets_mode = gateway_tickets.add_mutually_exclusive_group(required=True)
-    _flag(tickets_mode, "--probe", help="Print the protocol version and the ticket purposes; start nothing")
-    _flag(tickets_mode, "--serve", help="Answer ticket requests on stdin until it closes")
+    _flag(tickets_mode, "--probe", help="プロトコルバージョンとチケットの目的を表示し、何も起動しない")
+    _flag(tickets_mode, "--serve", help="stdin上のチケット要求に、閉じられるまで応答する")
     gateway_tickets.set_defaults(func=cmd_gateway_tickets)
 
     gateway_start = gateway_subparsers.add_parser(
-        "start", help="Start the installed systemd/launchd background service")
+        "start", help="インストール済みのsystemd/launchdバックグラウンドサービスを起動する")
     _add_system_flag(gateway_start)
     _flag(gateway_start, "--all",
-        help="Kill ALL stale gateway processes across all profiles before starting")
+        help="起動前に、すべてのプロファイルにわたる古いゲートウェイプロセスをすべて強制終了します")
     _flag(gateway_start, "--force", help=_FORCE_SERVED_PROFILE_HELP)
     _add_compat_platform_flag(gateway_start)
 
-    gateway_stop = gateway_subparsers.add_parser("stop", help="Stop gateway service")
+    gateway_stop = gateway_subparsers.add_parser("stop", help="ゲートウェイサービスを停止します")
     _add_system_flag(gateway_stop)
-    _flag(gateway_stop, "--all", help="Stop ALL gateway processes across all profiles")
+    _flag(gateway_stop, "--all", help="すべてのプロファイルにわたるすべてのゲートウェイプロセスを停止します")
     _flag(gateway_stop, "-y", "--yes", "--interrupt", dest="interrupt", help=_INTERRUPT_HELP.format(verb="stop"))
 
-    gateway_restart = gateway_subparsers.add_parser("restart", help="Restart gateway service")
+    gateway_restart = gateway_subparsers.add_parser("restart", help="ゲートウェイサービスを再起動します")
     _add_system_flag(gateway_restart)
     _flag(gateway_restart, "--all",
-        help="Kill ALL gateway processes across all profiles before restarting")
+        help="再起動前に、すべてのプロファイルにわたるすべてのゲートウェイプロセスを強制終了します")
     _flag(gateway_restart, "--force", help=_FORCE_SERVED_PROFILE_HELP)
     _flag(gateway_restart, "-y", "--yes", "--interrupt", dest="interrupt", help=_INTERRUPT_HELP.format(verb="restart"))
     _flag(gateway_restart, "--detach", help=(
-        "Without an installed service, start the replacement in the background (as `gateway ensure` "
-        "does) instead of in this terminal; used by apps that run the restart as a short-lived client"))
+        "インストール済みのサービスがない場合、このターミナルではなくバックグラウンドで置き換えを開始します（`gateway ensure` と同様）。再起動を短命なクライアントとして実行するアプリで使用されます"))
     _add_compat_platform_flag(gateway_restart)
 
-    gateway_status = gateway_subparsers.add_parser("status", help="Show gateway status")
-    _flag(gateway_status, "--deep", help="Deep status check")
+    gateway_status = gateway_subparsers.add_parser("status", help="ゲートウェイのステータスを表示")
+    _flag(gateway_status, "--deep", help="詳細なステータスチェック")
     _flag(gateway_status, "-l", "--full",
-        help="Show full, untruncated service/log output where supported")
+        help="サポートされている場合、完全な、切り詰められていないサービス/ログ出力を表示")
     _add_system_flag(gateway_status)
     _add_compat_platform_flag(gateway_status)
 
     # gateway install
     gateway_install = gateway_subparsers.add_parser(
-        "install", help="Install gateway as a systemd/launchd background service")
+        "install", help="ゲートウェイを systemd/launchd バックグラウンドサービスとしてインストール")
     _flag(gateway_install, "--force",
-        help="Force reinstall, and install even when the default multiplexer already serves this profile")
+        help="強制再インストールし、デフォルトのマルチプレクサがすでにこのプロファイルを提供している場合でもインストールする")
     _flag(gateway_install, "--system",
-        help="Install as a Linux system-level service (starts at boot)")
+        help="Linuxシステムレベルのサービスとしてインストールする（起動時に開始）")
     gateway_install.add_argument("--run-as-user", dest="run_as_user",
-        help="User account the Linux system service should run as")
+        help="Linuxシステムサービスが実行するユーザーアカウント")
     _flag(gateway_install, "--start-now", dest="start_now", default=None,
-        help="Start the gateway service immediately after installing")
+        help="インストール直後にゲートウェイサービスを開始する")
     gateway_install.add_argument("--no-start-now", dest="start_now", action="store_false",
-        help="Do not start the gateway service after installing")
+        help="インストール後にゲートウェイサービスを開始しない")
     _flag(gateway_install, "--start-on-login", dest="start_on_login", default=None,
-        help="Enable the service to start automatically on login/boot")
+        help="ログイン/起動時にサービスが自動的に開始されるように有効にする")
     gateway_install.add_argument("--no-start-on-login", dest="start_on_login", action="store_false",
-        help="Do not enable the service to start on login/boot")
+        help="ログイン/起動時にサービスが開始されないようにする")
     _flag(gateway_install, "--if-missing", dest="if_missing",
-        help="Do nothing when a gateway service is already installed")
+        help="ゲートウェイサービスが既にインストールされている場合は何もしない")
     _flag(gateway_install, "--force-unit-path", dest="force_unit_path",
-        help="Repoint a service definition that pins another HERMES_HOME at this one")
+        help="別のHERMES_HOMEを固定しているサービス定義をこのHERMES_HOMEに向け直す")
     _flag(gateway_install, "--elevated-handoff", dest="elevated_handoff", help=argparse.SUPPRESS)
 
-    gateway_uninstall = gateway_subparsers.add_parser("uninstall", help="Uninstall gateway service")
+    gateway_uninstall = gateway_subparsers.add_parser("uninstall", help="ゲートウェイサービスをアンインストールする")
     _add_system_flag(gateway_uninstall)
 
-    gateway_subparsers.add_parser("list", help="List all profiles and their gateway status")
+    gateway_subparsers.add_parser("list", help="すべてのプロファイルとそのゲートウェイステータスを一覧表示")
 
-    gateway_subparsers.add_parser("setup", help="Configure messaging platforms")
+    gateway_subparsers.add_parser("setup", help="メッセージングプラットフォームを設定")
 
     gateway_migrate_legacy = gateway_subparsers.add_parser(
-        "migrate-legacy", help="Remove legacy hermes.service units from pre-rename installs",
-        description="Stop, disable, and remove legacy Hermes gateway unit files "
-            "(e.g. hermes.service) left over from older installs. Profile "
-            "units (hermes-gateway-<profile>.service) and unrelated "
-            "third-party services are never touched.")
+        "migrate-legacy", help="リネーム前のインストールから残っているレガシー hermes.service ユニットを削除",
+        description="古いインストールから残っているレガシー Hermes ゲートウェイユニットファイル（例: hermes.service）を停止、無効化、削除します。プロファイルユニット（hermes-gateway-<profile>.service）および無関係なサードパーティサービスには一切触れません。")
     _flag(gateway_migrate_legacy, "--dry-run", dest="dry_run",
-        help="List what would be removed without doing it")
-    _flag(gateway_migrate_legacy, "-y", "--yes", dest="yes", help="Skip the confirmation prompt")
+        help="削除せずに削除対象を一覧表示")
+    _flag(gateway_migrate_legacy, "-y", "--yes", dest="yes", help="確認プロンプトをスキップする")
 
     gateway_migrate = gateway_subparsers.add_parser(
-        "migrate", help="Converge every per-profile gateway onto the ONE host gateway",
-        description="Converge this host onto the one-gateway-per-host model: stop and uninstall "
-            "each secondary profile's gateway and its supervisor unit (systemd, launchd, Windows "
-            "Scheduled Task), then restart the default profile's gateway so it serves every "
-            "profile. Runs a preflight first (duplicate bot tokens, port-binding platforms "
-            "without a /p/<profile>/ ingress) and changes nothing when blocked. Safe to re-run: a "
-            "half-migrated host converges on the next run. Per-profile gateways are not a "
-            "supported topology any more, so there is no rollback command.")
-    _flag(gateway_migrate, "--multiplex", dest="multiplex", help="Converge onto the one host gateway (default)")
-    _flag(gateway_migrate, "--dry-run", dest="dry_run", help="Print the plan and blockers without changing anything")
-    _flag(gateway_migrate, "-y", "--yes", dest="yes", help="Apply without confirmation")
+        "migrate", help="各プロファイルのゲートウェイを単一のホストゲートウェイに収束させる",
+        description="このホストを1ホスト1ゲートウェイモデルに収束させる：各セカンダリプロファイルのゲートウェイとそのスーパーバイザーユニット（systemd、launchd、Windows Scheduled Task）を停止してアンインストールし、その後デフォルトプロファイルのゲートウェイを再起動してすべてのプロファイルにサービスを提供する。最初にプリフライトを実行する（重複するボットトークン、/p/<profile>/ イングレスを持たないポートバインディングプラットフォーム）が、ブロックされた場合は何も変更しない。再実行しても安全：半分移行されたホストは次回の実行で収束する。プロファイルごとのゲートウェイはもはやサポートされるトポロジではないため、ロールバックコマンドは存在しない。")
+    _flag(gateway_migrate, "--multiplex", dest="multiplex", help="単一のホストゲートウェイに収束する（デフォルト）")
+    _flag(gateway_migrate, "--dry-run", dest="dry_run", help="何も変更せずにプランとブロッカーを表示する")
+    _flag(gateway_migrate, "-y", "--yes", dest="yes", help="確認なしで適用する")
     _flag(gateway_migrate, "--backends", dest="backends",
-        help="Report serve/dashboard background services and their ownership; "
-        "changes no service (normal Hermes startup bookkeeping still runs)")
+        help="serve/dashboard のバックグラウンドサービスとその所有権を報告する。サービスは変更しない（通常の Hermes 起動時の簿記処理は引き続き実行される）")
     _flag(gateway_migrate, "--json", dest="json",
-        help="With --backends: machine-readable output (the report, the plan, a run's result, --status)")
+        help="--backends を指定した場合: 機械可読な出力（レポート、プラン、実行結果、--status）")
     _flag(gateway_migrate, "--apply", dest="apply",
-        help="With --backends: move this home from the old dashboard/serve backend to the gateway's Webapp "
-        "on the same address (with --dry-run: print the plan and blockers only)")
+        help="--backends を指定した場合: このホームを古い dashboard/serve バックエンドから、同じアドレス上のゲートウェイの Webapp に移行する（--dry-run を指定した場合: プランとブロッカーのみを出力する）")
     _flag(gateway_migrate, "--restore", dest="restore",
-        help="With --backends: undo a finished backend migration from its manifest")
+        help="--backends を指定した場合: 完了済みのバックエンド移行をそのマニフェストから元に戻す")
     _flag(gateway_migrate, "--status", dest="status",
-        help="With --backends: state of the last or ongoing backend migration")
+        help="--backends 付き: 最後または進行中のバックエンド移行の状態")
     gateway_migrate.add_argument("--address", dest="address", metavar="HOST:PORT",
-        help="With --backends --apply: the old backend on this address (several found: the others still block)")
+        help="--backends --apply 付き: このアドレス上の古いバックエンド（複数見つかった: 他のものはまだブロック中）")
     _flag(gateway_migrate, "--keep-webapp-address", dest="keep_webapp_address",
-        help="With --backends --apply: retire the old backend but keep the Webapp on its current address")
+        help="--backends --apply 付き: 古いバックエンドを退役させるが、Webapp は現在のアドレスに維持する")
     _flag(gateway_migrate, "--force-interrupt", dest="force_interrupt",
-        help="With --backends --apply: proceed although a turn is running on the old backend (it is interrupted)")
+        help="--backends --apply 付き: 古いバックエンドでターンが実行中でも続行する（そのターンは中断される）")
     gateway_migrate.add_argument("--expect", dest="expect", metavar="TOKEN",
-        help="With --backends --apply: change nothing (exit 8) unless the backend found now is the one whose "
-        "expect_token the --dry-run --json plan printed")
+        help="--backends --apply 付き: 今見つかったバックエンドが、--dry-run --json プランが出力した expect_token を持つものでない限り、何も変更しない（終了コード 8）")
     _flag(gateway_migrate, "--detach", dest="detach",
-        help="With --backends --apply or --restore: run outside this process group / systemd cgroup and "
-        "return at once (follow it with --status)")
+        help="--backendsまたは--apply、または--restoreを指定した場合: このプロセスグループ/システムdのcgroupの外で実行し、即座に戻ります(その後--statusを実行してください)")
     _flag(gateway_migrate, "--detached-run", dest="detached_run", help=argparse.SUPPRESS)
     gateway_migrate.add_argument("--detached-ack", dest="detached_ack", help=argparse.SUPPRESS)
 
     # enroll: redeem a single-use connector token for the per-gateway secret + per-tenant
     # delivery key, written to .env. See website/docs/developer-guide/relay-connector-contract.md. EXPERIMENTAL.
     gateway_enroll = gateway_subparsers.add_parser("enroll",
-        help="Enroll this gateway with a relay connector (writes relay auth creds to .env)",
-        description="Redeem a single-use enrollment token with a relay connector. "
-            "Authenticates as your Nous Portal account (the connector derives the "
-            "authoritative tenant from it), mints this gateway's per-gateway secret "
-            "and per-tenant delivery key, and writes GATEWAY_RELAY_ID / "
-            "GATEWAY_RELAY_SECRET / GATEWAY_RELAY_DELIVERY_KEY into ~/.hermes/.env. "
-            "Requires being logged in (hermes setup). Not available in managed installs.")
+        help="このゲートウェイをリレーコネクタに登録します(.envにリレー認証情報を書き込みます)",
+        description="リレーコネクタで一度限りの登録トークンを使用します。Nous Portalアカウントとして認証され(コネクタがそこから権限のあるテナントを導出します)、このゲートウェイのゲートウェイごとのシークレットとテナントごとの配信キーを発行し、GATEWAY_RELAY_ID / GATEWAY_RELAY_SECRET / GATEWAY_RELAY_DELIVERY_KEYを~/.hermes/.envに書き込みます。ログインしている必要があります(hermes setup)。マネージドインストールでは利用できません。")
     gateway_enroll.add_argument("--token", default=None,
-        help="The single-use enrollment token from the connector (delivered with "
-            "your gateway config). Also settable via GATEWAY_RELAY_ENROLL_TOKEN.")
+        help="コネクタからの一度限りの登録トークン(ゲートウェイ設定とともに配信されます)。GATEWAY_RELAY_ENROLL_TOKENでも設定できます。")
     gateway_enroll.add_argument("--connector-url", dest="connector_url", default=None,
-        help="The connector base/relay URL, e.g. wss://connector.example.com/relay "
-            "or https://connector.example.com. Also settable via GATEWAY_RELAY_URL "
-            "/ gateway.relay_url in config.yaml.")
+        help="コネクタのベース/リレーURL。例: wss://connector.example.com/relay または https://connector.example.com.。GATEWAY_RELAY_URL / config.yamlのgateway.relay_urlでも設定できます。")
     gateway_enroll.add_argument("--gateway-id", dest="gateway_id", default=None,
-        help="A stable id for this gateway instance (kill-switch granularity). "
-            "Defaults to gw-<hostname>.")
+        help="このゲートウェイインスタンスの安定したID（キルスイッチの粒度）。デフォルトは gw-<hostname>。")
     gateway_enroll.add_argument("--wake-url", dest="wake_url", default=None,
-        help="Phase 5 §5.2 wake URL: a reachable URL the connector pokes "
-            "(payload-free GET) to wake this gateway when buffered work arrives "
-            "while it's idle/suspended, so it reconnects and drains. Persisted as "
-            "GATEWAY_RELAY_WAKE_URL in ~/.hermes/.env and forwarded at provision. "
-            "Optional — without it the gateway still drains whenever it next "
-            "reconnects on its own.")
+        help="Phase 5 §5.2 ウェイクURL：バッファリングされた作業がアイドル/サスペンド中に到着した際、このゲートウェイをウェイクするためにコネクタがポークする（ペイロードなしのGET）到達可能なURL。これによりゲートウェイは再接続してドレインします。~/.hermes/.env に GATEWAY_RELAY_WAKE_URL として永続化され、プロビジョニング時に転送されます。任意 — これがなくても、ゲートウェイは次回自ら再接続する際にドレインします。")
     gateway_enroll.set_defaults(func=cmd_gateway_enroll)
 
     # proxy: local OpenAI-compatible proxy attaching the user's OAuth provider credentials,
     # so external apps (Open WebUI, Karakeep, ...) ride a logged-in subscription.
     proxy_parser = subparsers.add_parser(
-        "proxy", help="Local OpenAI-compatible proxy to OAuth providers",
-        description="Run a local HTTP server that forwards OpenAI-compatible requests "
-            "to an OAuth-authenticated provider (e.g. Nous Portal). External "
-            "apps can point at the proxy with any bearer token; the proxy "
-            "attaches your real credentials.")
+        "proxy", help="OAuthプロバイダーへのローカルOpenAI互換プロキシ",
+        description="OpenAI互換リクエストをOAuth認証済みプロバイダー（例：Nous Portal）に転送するローカルHTTPサーバーを実行します。外部アプリは任意のベアラートークンでプロキシを指定できます。プロキシがあなたの実際の認証情報を添付します。")
     proxy_subparsers = proxy_parser.add_subparsers(dest="proxy_command")
 
-    proxy_start = proxy_subparsers.add_parser("start", help="Run the proxy in the foreground")
+    proxy_start = proxy_subparsers.add_parser("start", help="プロキシをフォアグラウンドで実行")
     proxy_start.add_argument("--provider", default="nous",
-        help="Upstream provider: nous or xai (default: nous). See `hermes proxy providers`.")
+        help="上流プロバイダー: nous または xai (デフォルト: nous)。`hermes proxy providers` を参照。")
     proxy_start.add_argument("--host", default=None,
-        help="Bind address (default: 127.0.0.1). Use 0.0.0.0 to expose on LAN.")
-    proxy_start.add_argument("--port", type=int, default=None, help="Bind port (default: 8645)")
+        help="バインドアドレス (デフォルト: 127.0.0.1)。LAN に公開するには 0.0.0.0 を使用。")
+    proxy_start.add_argument("--port", type=int, default=None, help="バインドポート (デフォルト: 8645)")
 
-    proxy_subparsers.add_parser("status", help="Show which proxy upstreams are ready")
-    proxy_subparsers.add_parser("providers", help="List available proxy upstream providers")
+    proxy_subparsers.add_parser("status", help="どのプロキシ上流が準備完了かを表示")
+    proxy_subparsers.add_parser("providers", help="利用可能なプロキシ上流プロバイダーを一覧表示")
     proxy_parser.set_defaults(func=cmd_proxy)
     gateway_parser.set_defaults(func=cmd_gateway)

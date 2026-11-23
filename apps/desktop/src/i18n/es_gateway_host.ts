@@ -4,10 +4,10 @@ import type { GatewayHostTranslations } from './types_gateway_host'
 export const esGatewayHost: GatewayHostTranslations = {
   unavailableTitle: 'Ajustes del gateway no disponibles',
   unavailableDesc:
-    'Los ajustes de conexión solo se pueden cambiar desde la app Hermes Desktop en el equipo que la ejecuta.',
+    'Los ajustes de conexión solo se pueden cambiar desde la app ALL AI5.2 TACT Desktop en el equipo que la ejecuta.',
   webappHostTitle: 'Host de Hermes',
   webappHostDesc:
-    'La Webapp siempre se ejecuta en el host de Hermes que la sirve. Las conexiones guardadas de abajo son la lista de esta máquina, compartida con la app Hermes Desktop; los demás gateways se alcanzan a través de este host.',
+    'La Webapp siempre se ejecuta en el host de Hermes que la sirve. Las conexiones guardadas de abajo son la lista de esta máquina, compartida con la app ALL AI5.2 TACT Desktop; los demás gateways se alcanzan a través de este host.',
   webappOauthPaste: {
     title: 'Terminar de iniciar sesión',
     description: 'Si la pestaña de inicio de sesión terminó en una dirección que no carga (este navegador no está en la máquina del gateway), pega esa dirección aquí.',

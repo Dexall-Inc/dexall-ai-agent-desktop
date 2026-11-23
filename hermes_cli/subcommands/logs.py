@@ -10,43 +10,43 @@ def build_logs_parser(subparsers, *, cmd_logs: Callable) -> None:
     """Attach the ``logs`` subcommand to ``subparsers``."""
     logs_parser = subparsers.add_parser(
         "logs",
-        help="View and filter Hermes log files",
-        description="View, tail, and filter agent.log / errors.log / gateway.log / gui.log / desktop.log / update.log / desktop-update-handoff.log",
+        help="Hermes のログを表示・絞り込みする",
+        description="agent.log、errors.log、gateway.log、gui.log、desktop.log、update.log、desktop-update-handoff.log を表示・追跡・絞り込みします。",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
-Examples:
-    hermes logs                    Show last 50 lines of agent.log
-    hermes logs -f                 Follow agent.log in real time
-    hermes logs errors             Show last 50 lines of errors.log
-    hermes logs gateway -n 100     Show last 100 lines of gateway.log
-    hermes logs gui -f             Follow gui.log in real time
-    hermes logs desktop -f         Follow desktop.log (Electron app boot/backend)
-    hermes logs update             Show last 50 lines of update.log (hermes update mirror)
-    hermes logs handoff            Show last 50 lines of desktop-update-handoff.log
-    hermes logs --level WARNING    Only show WARNING and above
-    hermes logs --session abc123   Filter by session ID
-    hermes logs --component tools  Only show tool-related lines
-    hermes logs --since 1h         Lines from the last hour
-    hermes logs --since 30m -f     Follow, starting from 30 min ago
-    hermes logs list               List available log files with sizes
+使用例:
+    hermes logs                    agent.log の末尾50行を表示
+    hermes logs -f                 agent.log をリアルタイムで追跡
+    hermes logs errors             errors.log の末尾50行を表示
+    hermes logs gateway -n 100     gateway.log の末尾100行を表示
+    hermes logs gui -f             gui.log をリアルタイムで追跡
+    hermes logs desktop -f         desktop.log（Electron の起動・バックエンド）を追跡
+    hermes logs update             update.log（hermes update の出力）の末尾50行を表示
+    hermes logs handoff            desktop-update-handoff.log の末尾50行を表示
+    hermes logs --level WARNING    WARNING 以上を表示
+    hermes logs --session abc123   セッション ID で絞り込む
+    hermes logs --component tools  ツール関連の行だけ表示
+    hermes logs --since 1h         直近1時間の行を表示
+    hermes logs --since 30m -f     30分前から現在まで表示し、以後も追跡
+    hermes logs list               利用できるログファイルとサイズを一覧表示
 """)
     logs_parser.add_argument(
         "log_name",
         nargs="?",
         default="agent",
-        help="Log to view: agent (default), errors, gateway, gui, desktop, update, handoff, or 'list' to show available files",
+        help="表示するログ。agent（既定）、errors、gateway、gui、desktop、update、handoff。list はファイル一覧を表示。",
     )
     logs_parser.add_argument(
-        "-n", "--lines", type=int, default=50, help="Number of lines to show (default: 50)")
+        "-n", "--lines", type=int, default=50, help="表示する行数（既定: 50）")
     logs_parser.add_argument(
-        "-f", "--follow", action="store_true", help="Follow the log in real time (like tail -f)")
+        "-f", "--follow", action="store_true", help="ログをリアルタイムで追跡（tail -f と同様）")
     logs_parser.add_argument(
-        "--level", metavar="LEVEL", help="Minimum log level to show (DEBUG, INFO, WARNING, ERROR)")
+        "--level", metavar="LEVEL", help="表示する最低ログレベル（DEBUG、INFO、WARNING、ERROR）")
     logs_parser.add_argument(
-        "--session", metavar="ID", help="Filter lines containing this session ID substring")
+        "--session", metavar="ID", help="指定文字列を含むセッション ID の行に絞り込む")
     logs_parser.add_argument(
-        "--since", metavar="TIME", help="Show lines since TIME ago (e.g. 1h, 30m, 2d)")
+        "--since", metavar="TIME", help="TIME 前からの行を表示（例: 1h、30m、2d）")
     logs_parser.add_argument(
         "--component", metavar="NAME",
-        help="Filter by component: gateway, agent, tools, cli, cron, gui")
+        help="コンポーネントで絞り込む（gateway、agent、tools、cli、cron、gui）")
     logs_parser.set_defaults(func=cmd_logs)

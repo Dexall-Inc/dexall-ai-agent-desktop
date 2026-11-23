@@ -41,7 +41,7 @@ cd "$SCRIPT_DIR"
 export UV_NO_CONFIG=1
 
 echo ""
-echo -e "${CYAN}☤ Hermes Agent Setup${NC}"
+echo -e "${CYAN}✦ ALL AI5.2 TACT セットアップ${NC}"
 echo ""
 
 # ============================================================================
@@ -222,7 +222,7 @@ if ! "$boot_py" -I -X utf8 hermes_cli/_launchers.py "$bin_dir"; then
     echo -e "${RED}✗${NC} launcher publication failed" >&2
     exit 1
 fi
-echo -e "${GREEN}✓${NC} Published Hermes commands in $bin_dir"
+echo -e "${GREEN}✓${NC} $bin_dir に ALL AI5.2 TACT のコマンドを配置しました"
 
 if [ "$os" != win32 ]; then
     # Determine the appropriate shell config file

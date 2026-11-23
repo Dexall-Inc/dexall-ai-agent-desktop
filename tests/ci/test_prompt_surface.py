@@ -50,7 +50,7 @@ def test_summary_names_the_surface_and_tool_that_changed(tmp_path):
     shutil.copytree(base, head)
     prompt = head / "prompts" / "cli.claude.txt"
     text = prompt.read_text(encoding="utf-8-sig")
-    prompt.write_text(text.replace("# Finishing the job", "# Finish every job"), encoding="utf-8")
+    prompt.write_text(text.replace("# 作業を完了する", "# Finish every job"), encoding="utf-8")
     tool = head / "tools" / "write_file.json"
     text = tool.read_text(encoding="utf-8-sig")
     tool.write_text(text.replace('"description": "', '"description": "Prefer patch. ', 1), encoding="utf-8")

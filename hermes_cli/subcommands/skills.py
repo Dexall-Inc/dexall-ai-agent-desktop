@@ -20,158 +20,142 @@ _SOURCE_CHOICES = [
 def build_skills_parser(subparsers, *, cmd_skills: Callable) -> None:
     """Attach the ``skills`` subcommand to ``subparsers``."""
     skills_parser = subparsers.add_parser(
-        "skills", help="Search, install, configure, and manage skills",
-        description="Search, install, inspect, audit, configure, and manage skills from skills.sh, well-known agent skill endpoints, GitHub, ClawHub, and other registries.",
+        "skills", help="スキルの検索、インストール、設定、管理",
+        description="skills.sh、よく知られたエージェントスキルエンドポイント、GitHub、ClawHub、その他のレジストリからスキルを検索、インストール、検査、監査、設定、管理します。",
     )
     skills_subparsers = skills_parser.add_subparsers(dest="skills_action")
 
     skills_trust = skills_subparsers.add_parser("trust",
-        help="Trust a project so its repo-local skills (./.hermes/skills, ./.agents/skills) load")
+        help="プロジェクトを信頼し、そのリポジトリローカルのスキル（./.hermes/skills、./.agents/skills）を読み込む")
     skills_trust.add_argument("path", nargs="?", default=None,
-        help="Project root to trust (default: enclosing git checkout of cwd)")
+        help="信頼するプロジェクトルート（デフォルト: cwd を囲む git チェックアウト）")
 
     skills_untrust = skills_subparsers.add_parser(
-        "untrust", help="Revoke project-skill trust for a repo")
+        "untrust", help="リポジトリのプロジェクトスキル信頼を撤回する")
     skills_untrust.add_argument("path", nargs="?", default=None,
-        help="Project root to untrust (default: enclosing git checkout of cwd)")
+        help="信頼しないプロジェクトルート（デフォルト: cwd を囲む git チェックアウト）")
 
     skills_browse = skills_subparsers.add_parser(
-        "browse", help="Browse all available skills (paginated)")
-    skills_browse.add_argument("--page", type=int, default=1, help="Page number (default: 1)")
+        "browse", help="利用可能なすべてのスキルを閲覧（ページング対応）")
+    skills_browse.add_argument("--page", type=int, default=1, help="ページ番号（デフォルト: 1）")
     skills_browse.add_argument(
-        "--size", type=int, default=20, help="Results per page (default: 20)")
+        "--size", type=int, default=20, help="1ページあたりの結果数（デフォルト: 20）")
     skills_browse.add_argument("--source", default="all", choices=_SOURCE_CHOICES,
-        help="Filter by source or provider (e.g. nvidia, openai) (default: all)")
+        help="ソースまたはプロバイダーでフィルタリング（例: nvidia、openai）（デフォルト: すべて）")
 
-    skills_search = skills_subparsers.add_parser("search", help="Search skill registries")
-    skills_search.add_argument("query", help="Search query")
+    skills_search = skills_subparsers.add_parser("search", help="スキルレジストリを検索")
+    skills_search.add_argument("query", help="検索クエリ")
     skills_search.add_argument("--source", default="all", choices=_SOURCE_CHOICES,
-        help="Filter by source or provider (e.g. nvidia, openai)")
-    skills_search.add_argument("--limit", type=int, default=25, help="Max results")
+        help="ソースまたはプロバイダでフィルタ（例: nvidia, openai）")
+    skills_search.add_argument("--limit", type=int, default=25, help="最大結果数")
     add_json_flag(
-        skills_search, "Output JSON instead of a table (full identifiers, scripting-friendly)")
+        skills_search, "テーブルの代わりにJSONを出力（完全な識別子、スクリプト向け）")
 
-    skills_install = skills_subparsers.add_parser("install", help="Install a skill")
+    skills_install = skills_subparsers.add_parser("install", help="スキルをインストール")
     skills_install.add_argument("identifier",
-        help="Skill identifier (e.g. openai/skills/skill-creator) or a direct HTTP(S) URL to a SKILL.md file",
+        help="スキル識別子（例: openai/skills/skill-creator）またはSKILL.mdファイルへの直接のHTTP(S) URL",
     )
-    skills_install.add_argument("--category", default="", help="Category folder to install into")
+    skills_install.add_argument("--category", default="", help="インストール先のカテゴリフォルダ")
     skills_install.add_argument("--name", default="",
-        help="Override the skill name (useful when installing from a URL whose SKILL.md has no `name:` frontmatter)",
+        help="スキル名を上書きする（SKILL.mdに`name:`フロントマターがないURLからインストールする場合に便利）",
     )
-    _flag(skills_install, "--force", help="Install despite blocked scan verdict")
-    add_yes_flag(skills_install, "Skip confirmation prompt (needed in TUI mode)")
+    _flag(skills_install, "--force", help="ブロックされたスキャン判定にもかかわらずインストールする")
+    add_yes_flag(skills_install, "確認プロンプトをスキップ（TUIモードで必要）")
 
     skills_inspect = skills_subparsers.add_parser(
-        "inspect", help="Preview a skill without installing")
-    skills_inspect.add_argument("identifier", help="Skill identifier")
+        "inspect", help="スキルをインストールせずにプレビュー")
+    skills_inspect.add_argument("identifier", help="スキル識別子")
 
-    skills_list = skills_subparsers.add_parser("list", help="List installed skills")
+    skills_list = skills_subparsers.add_parser("list", help="インストール済みスキルを一覧表示")
     skills_list.add_argument("--source", default="all", choices=["all", "hub", "builtin", "local"])
     _flag(skills_list, "--enabled-only",
-        help="Hide disabled skills. Use with -p <profile> to see exactly "
-        "which skills will load for that profile.")
+        help="無効なスキルを非表示。`-p <profile>` と併用すると、そのプロファイルで実際に読み込まれるスキルを正確に確認できます。")
 
     skills_check = skills_subparsers.add_parser(
-        "check", help="Check installed hub skills for updates")
-    skills_check.add_argument("name", nargs="?", help="Specific skill to check (default: all)")
+        "check", help="インストール済みのハブスキルを更新がないか確認する")
+    skills_check.add_argument("name", nargs="?", help="確認する特定のスキル（デフォルト: すべて）")
 
-    skills_update = skills_subparsers.add_parser("update", help="Update installed hub skills")
+    skills_update = skills_subparsers.add_parser("update", help="インストール済みのハブスキルを更新する")
     skills_update.add_argument(
-        "name", nargs="?", help="Specific skill to update (default: all outdated skills)")
+        "name", nargs="?", help="更新する特定のスキル（デフォルト: すべての古いスキル）")
     _flag(skills_update, "--force",
-        help="Overwrite skills you have edited locally (they are skipped by default)")
+        help="ローカルで編集したスキルを上書きする（デフォルトではスキップされます）")
 
-    skills_audit = skills_subparsers.add_parser("audit", help="Re-scan installed hub skills")
-    skills_audit.add_argument("name", nargs="?", help="Specific skill to audit (default: all)")
-    _flag(skills_audit, "--deep", help="Run AST-level analysis on Python files (opt-in diagnostic)")
+    skills_audit = skills_subparsers.add_parser("audit", help="インストール済みハブスキルを再スキャン")
+    skills_audit.add_argument("name", nargs="?", help="監査する特定のスキル（デフォルト: すべて）")
+    _flag(skills_audit, "--deep", help="Pythonファイルに対してASTレベルの解析を実行（オプトイン診断）")
 
     skills_uninstall = skills_subparsers.add_parser(
-        "uninstall", help="Remove a hub-installed skill")
-    skills_uninstall.add_argument("name", help="Skill name to remove")
+        "uninstall", help="ハブにインストールされたスキルを削除")
+    skills_uninstall.add_argument("name", help="削除するスキル名")
     add_yes_flag(skills_uninstall)
 
     skills_reset = skills_subparsers.add_parser("reset",
-        help="Reset a bundled skill — clears 'user-modified' tracking so updates work again",
-        description="Clear a bundled skill's entry from the sync manifest (~/.hermes/skills/.bundled_manifest) "
-            "so future 'hermes update' runs stop marking it as user-modified. Pass --restore to also "
-            "replace the current copy with the bundled version.")
-    skills_reset.add_argument("name", help="Skill name to reset (e.g. google-workspace)")
+        help="バンドルされたスキルをリセット — 「ユーザー変更」トラッキングをクリアして、更新が再び機能するようにします",
+        description="バンドルされたスキルのエントリを同期マニフェスト（~/.hermes/skills/.bundled_manifest）からクリアし、今後の「hermes update」実行時にユーザー変更としてマークされないようにします。--restoreを渡すと、現在のコピーをバンドル版に置き換えることもできます。")
+    skills_reset.add_argument("name", help="リセットするスキル名（例: google-workspace）")
     _flag(skills_reset, "--restore",
-        help="Also delete the current copy and re-copy the bundled version")
-    add_yes_flag(skills_reset, "Skip confirmation prompt when using --restore")
+        help="現在のコピーも削除し、バンドル版を再コピーします")
+    add_yes_flag(skills_reset, "--restore使用時に確認プロンプトをスキップします")
 
     skills_list_modified = skills_subparsers.add_parser(
-        "list-modified", help="List bundled skills you've edited (which `hermes update` keeps)",
-        description="Show the bundled skills whose local copy differs from the version last "
-            "synced, i.e. the ones `hermes update` reports as user-modified and skips. "
-            "Use `hermes skills diff <name>` to see changes and `hermes skills reset "
-            "<name>` to resume updates.")
-    add_json_flag(skills_list_modified, "Output the list as JSON")
+        "list-modified", help="編集済みのバンドルスキルを一覧表示します（`hermes update`が保持しているもの）",
+        description="ローカルコピーが最後に同期されたバージョンと異なるバンドルスキル、つまり`hermes update`がユーザー変更として報告してスキップするものを表示します。変更を確認するには`hermes skills diff <name>`を、更新を再開するには`hermes skills reset <name>`を使用してください。")
+    add_json_flag(skills_list_modified, "リストをJSONとして出力します")
 
     skills_diff = skills_subparsers.add_parser(
-        "diff", help="Show how your copy of a bundled skill differs from the stock version",
-        description="Print a unified diff between your local copy of a bundled skill and the "
-            "current bundled (stock) version, so you can confirm what changed before "
-            "running `hermes skills reset`.")
-    skills_diff.add_argument("name", help="Skill name to diff (e.g. google-workspace)")
+        "diff", help="バンドルスキルの自分のコピーが標準バージョンとどのように異なるかを表示します",
+        description="バンドルスキルのローカルコピーと現在のバンドル（標準）バージョンとの間の統一差分を出力し、`hermes skills reset`を実行する前に何が変更されたかを確認できるようにします。")
+    skills_diff.add_argument("name", help="スキル名（例：google-workspace）")
 
     skills_opt_out = skills_subparsers.add_parser(
-        "opt-out", help="Stop bundled skills from being seeded into this profile",
-        description="Write the .no-bundled-skills marker so the installer, "
-            "`hermes update`, and any direct sync stop seeding bundled skills "
-            "into the active profile. By default nothing already on disk is "
-            "touched. Pass --remove to ALSO delete bundled skills that are "
-            "unmodified (user-edited and hub/local skills are never removed).")
-    _flag(skills_opt_out, "--remove", help="Also delete already-present unmodified bundled skills")
-    add_yes_flag(skills_opt_out, "Skip confirmation prompt when using --remove")
+        "opt-out", help="バンドルされたスキルがこのプロファイルにシードされるのを停止する",
+        description="インストーラー、`hermes update`、および直接同期がバンドルされたスキルをアクティブなプロファイルにシードするのを停止するように、.no-bundled-skills マーカーを書き込みます。デフォルトでは、ディスク上の既存のものには何も触れません。--remove を渡すと、未変更のバンドルされたスキルも削除されます（ユーザー編集済みおよびハブ/ローカルのスキルは決して削除されません）。")
+    _flag(skills_opt_out, "--remove", help="既に存在する未変更のバンドルされたスキルも削除する")
+    add_yes_flag(skills_opt_out, "--remove を使用する際に確認プロンプトをスキップする")
 
     skills_opt_in = skills_subparsers.add_parser(
-        "opt-in", help="Re-enable bundled-skill seeding (undo opt-out)",
-        description="Remove the .no-bundled-skills marker so bundled skills are seeded "
-            "again on the next `hermes update`. Pass --sync to re-seed now.")
+        "opt-in", help="バンドルスキルのシードを再度有効にする（オプトアウトを元に戻す）",
+        description=".no-bundled-skills マーカーを削除して、次の `hermes update` でバンドルスキルが再度シードされるようにします。今すぐ再シードするには --sync を渡します。")
     _flag(skills_opt_in, "--sync",
-        help="Re-seed bundled skills immediately instead of waiting for update")
+        help="更新を待たずにバンドルスキルをすぐに再シードする")
 
     skills_repair_official = skills_subparsers.add_parser(
-        "repair-official", help="Backfill or restore official optional skills from repo source",
-        description="Repair official optional skill provenance. By default, only backfills "
-            "hub metadata for exact matches. Pass --restore to replace missing or "
-            "mutated active copies from optional-skills/, moving existing copies to "
-            "a restore backup first. Use name 'all' to repair every optional skill.")
+        "repair-official", help="リポジトリのソースから公式のオプションスキルをバックフィルまたは復元する",
+        description="公式オプションスキルの出所を修復します。デフォルトでは、完全一致したものについてのみハブのメタデータをバックフィルします。--restore を渡すと、optional-skills/ から欠落または変更されたアクティブなコピーを置き換え、既存のコピーを先に復元バックアップへ移動します。すべてのオプションスキルを修復するには名前 'all' を使用します。")
     skills_repair_official.add_argument(
-        "name", help="Official optional skill folder/frontmatter name, or 'all'")
+        "name", help="公式のオプションスキルフォルダ/フロントマター名、または 'all'")
     _flag(skills_repair_official, "--restore",
-        help="Restore from official optional source, backing up existing matching copies")
-    add_yes_flag(skills_repair_official, "Skip confirmation prompt when using --restore")
+        help="公式のオプションソースから復元し、既存の一致するコピーをバックアップする")
+    add_yes_flag(skills_repair_official, "--restore使用時に確認プロンプトをスキップする")
 
-    skills_publish = skills_subparsers.add_parser("publish", help="Publish a skill to a registry")
-    skills_publish.add_argument("skill_path", help="Path to skill directory")
+    skills_publish = skills_subparsers.add_parser("publish", help="スキルをレジストリに公開する")
+    skills_publish.add_argument("skill_path", help="スキルディレクトリへのパス")
     skills_publish.add_argument(
-        "--to", default="github", choices=["github", "clawhub"], help="Target registry")
+        "--to", default="github", choices=["github", "clawhub"], help="ターゲットレジストリ")
     skills_publish.add_argument(
-        "--repo", default="", help="Target GitHub repo (e.g. openai/skills)")
+        "--repo", default="", help="ターゲットGitHubリポジトリ（例: openai/skills）")
 
     skills_snapshot = skills_subparsers.add_parser(
-        "snapshot", help="Export/import skill configurations")
+        "snapshot", help="スキル設定のエクスポート/インポート")
     snapshot_subparsers = skills_snapshot.add_subparsers(dest="snapshot_action")
-    snap_export = snapshot_subparsers.add_parser("export", help="Export installed skills to a file")
-    snap_export.add_argument("output", help="Output JSON file path (use - for stdout)")
+    snap_export = snapshot_subparsers.add_parser("export", help="インストール済みスキルをファイルにエクスポート")
+    snap_export.add_argument("output", help="出力JSONファイルパス（stdoutには - を使用）")
     snap_import = snapshot_subparsers.add_parser(
-        "import", help="Import and install skills from a file")
-    snap_import.add_argument("input", help="Input JSON file path")
-    _flag(snap_import, "--force", help="Force install despite caution verdict")
+        "import", help="ファイルからスキルをインポートしてインストールする")
+    snap_import.add_argument("input", help="入力JSONファイルパス")
+    _flag(snap_import, "--force", help="注意判定にもかかわらず強制インストールする")
 
-    skills_tap = skills_subparsers.add_parser("tap", help="Manage skill sources")
+    skills_tap = skills_subparsers.add_parser("tap", help="スキルソースを管理する")
     tap_subparsers = skills_tap.add_subparsers(dest="tap_action")
-    tap_subparsers.add_parser("list", help="List configured taps")
-    tap_add = tap_subparsers.add_parser("add", help="Add a GitHub repo as skill source")
-    tap_add.add_argument("repo", help="GitHub repo (e.g. owner/repo)")
-    tap_rm = tap_subparsers.add_parser("remove", help="Remove a tap")
-    tap_rm.add_argument("name", help="Tap name to remove")
+    tap_subparsers.add_parser("list", help="設定済みタップを一覧表示する")
+    tap_add = tap_subparsers.add_parser("add", help="GitHubリポジトリをスキルソースとして追加")
+    tap_add.add_argument("repo", help="GitHubリポジトリ（例: owner/repo）")
+    tap_rm = tap_subparsers.add_parser("remove", help="タップを削除")
+    tap_rm.add_argument("name", help="削除するタップ名")
 
     # config sub-action: interactive enable/disable
     skills_subparsers.add_parser(
-        "config", help="Interactive skill configuration — enable/disable individual skills")
+        "config", help="対話型スキル設定 — 個別スキルの有効化/無効化")
 
     skills_parser.set_defaults(func=cmd_skills)

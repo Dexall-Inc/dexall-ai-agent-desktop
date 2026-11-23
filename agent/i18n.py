@@ -34,7 +34,8 @@ SUPPORTED_LANGUAGES: tuple[str, ...] = (
     "en", "zh", "zh-hant", "ja", "de", "es", "fr", "tr", "uk",
     "af", "ko", "it", "ga", "pt", "ru", "hu", "ar",
 )
-DEFAULT_LANGUAGE = "en"
+DEFAULT_LANGUAGE = "ja"
+_FALLBACK_LANGUAGE = "en"
 
 # Natural aliases so "chinese" / "zh-CN" / "jp" hit the right catalog instead of
 # silently falling back to English. Bare "chinese" defaults to Simplified;
@@ -254,8 +255,8 @@ def t(key: str, lang: str | None = None, **format_kwargs: Any) -> str:
     home = _current_home()
     target = _normalize_lang(lang, home) if lang else _resolve_language(home)
     value = _load_catalog(target, home).get(key)
-    if value is None and target != DEFAULT_LANGUAGE:
-        value = _load_catalog(DEFAULT_LANGUAGE, home).get(key)
+    if value is None and target != _FALLBACK_LANGUAGE:
+        value = _load_catalog(_FALLBACK_LANGUAGE, home).get(key)
     if value is None:
         logger.debug("i18n miss: key=%r lang=%r", key, target)
         value = key

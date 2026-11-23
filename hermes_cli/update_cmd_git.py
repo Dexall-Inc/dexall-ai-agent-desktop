@@ -295,6 +295,11 @@ def _is_fork(origin_url: Optional[str]) -> bool:
         url = url.rstrip("/")
         return url.removesuffix(".git")
 
+    from hermes_cli.source_releases import DEXALL_REPOSITORY, _GITHUB_ORIGIN
+
+    origin = _GITHUB_ORIGIN.fullmatch(origin_url)
+    if origin and origin[1].casefold() == DEXALL_REPOSITORY.casefold():
+        return False
     return _norm(origin_url) not in {_norm(official) for official in OFFICIAL_REPO_URLS}
 
 

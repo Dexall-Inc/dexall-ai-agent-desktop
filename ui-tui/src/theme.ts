@@ -252,11 +252,11 @@ export function themeToneHex(tone: string): string {
 // ── Defaults ─────────────────────────────────────────────────────────
 
 const BRAND: ThemeBrand = {
-  name: 'Hermes Agent',
-  icon: '☤',
-  prompt: '❯',
-  welcome: 'Type your message or /help for commands.',
-  goodbye: 'Goodbye! ☤',
+  name: 'Dexall ALL AI5.2 TACT',
+  icon: '✦',
+  prompt: 'tact >',
+  welcome: 'メッセージを入力してください。コマンド一覧は /help。',
+  goodbye: 'またお会いしましょう。',
   tool: '┊',
   helpHeader: '(^_^)? Commands'
 }

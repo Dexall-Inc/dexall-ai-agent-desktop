@@ -92,7 +92,14 @@ _BUILTIN_SKINS: dict[str, dict[str, Any]] = {
             "completion_menu_bg": "#F5F5F5", "completion_menu_current_bg": "#E0D1BF",
             "selection_bg": "#D4E4F7", "status_bar_bg": "#F5F5F5", "voice_status_bg": "#F5F5F5"},
         "spinner": {},  # empty = hardcoded defaults in display.py
-        "branding": _HERMES_BRANDING,
+        "branding": {
+            "agent_name": "Dexall ALL AI5.2 TACT",
+            "welcome": "メッセージを入力してください。コマンド一覧は /help。",
+            "goodbye": "またお会いしましょう。",
+            "response_label": " ✦ TACT ",
+            "prompt_symbol": "tact >",
+            "help_header": "利用できるコマンド",
+        },
         "tool_prefix": "┊"},
     "ares": {
         "name": "ares", "description": "War-god theme — crimson and bronze",

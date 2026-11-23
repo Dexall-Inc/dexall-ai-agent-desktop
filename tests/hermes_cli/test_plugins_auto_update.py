@@ -100,7 +100,13 @@ def test_hermes_update_names_catalog_pins_it_moved_and_rearms_the_check(home, mo
     new_pin = "c" * 40
     entry = plugin_catalog.PluginCatalogEntry(name="cat-plug", repo="https://example.invalid/r", sha=new_pin,
                                               description="d", maintainer="m")
-    monkeypatch.setattr(plugin_catalog, "load_catalog", lambda catalog_dir=None: [entry])
+    catalog_loads = []
+
+    def load_catalog(catalog_dir=None):
+        catalog_loads.append(catalog_dir)
+        return [entry]
+
+    monkeypatch.setattr(plugin_catalog, "load_catalog", load_catalog)
     (home / "plugins" / ".install-metadata.json").write_text(json.dumps({
         "cat-plug": {"catalog": {"name": "cat-plug", "sha": "a" * 40, "pin": "a" * 40}},
         "current": {"catalog": {"name": "cat-plug", "sha": new_pin, "pin": new_pin}}}), encoding="utf-8")
@@ -108,8 +114,16 @@ def test_hermes_update_names_catalog_pins_it_moved_and_rearms_the_check(home, mo
     marker.parent.mkdir()
     marker.write_text("1", encoding="utf-8")
 
-    report_catalog_updates_after_hermes_update(home, [])
-    assert "1 plugin update(s) from the new catalog in this profile: cat-plug" in capsys.readouterr().out
+    sibling = home / "profiles" / "sibling"
+    (sibling / "plugins").mkdir(parents=True)
+    metadata = ".install-metadata.json"
+    (sibling / "plugins" / metadata).write_bytes((home / "plugins" / metadata).read_bytes())
+
+    report_catalog_updates_after_hermes_update(home, [("sibling", sibling)])
+    output = capsys.readouterr().out
+    assert "1 plugin update(s) from the new catalog in this profile: cat-plug" in output
+    assert "1 plugin update(s) from the new catalog in sibling: cat-plug" in output
+    assert len(catalog_loads) == 1
     assert not marker.exists()
 
 

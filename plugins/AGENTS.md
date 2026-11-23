@@ -1,199 +1,108 @@
-# plugins/ — plugin kinds, compat contract, in-tree policy
+# plugins/ — プラグイン種別、互換性契約、ツリー内ポリシー
 
-Applies on top of the root `AGENTS.md`. Authoring guide + canonical compat contract:
-`website/docs/developer-guide/plugins/index.md`. Per-kind guides: `memory-provider-plugin.md`,
-`model-provider-plugin.md`, `context-engine-plugin.md`, `image-gen-provider-plugin.md`, ...
+ルートの `AGENTS.md` に重ねて適用されます。オーサリングガイドと標準の互換性契約:
+`website/docs/developer-guide/plugins/index.md`。種別ごとのガイド: `memory-provider-plugin.md`、
+`model-provider-plugin.md`、`context-engine-plugin.md`、`image-gen-provider-plugin.md`、...
 
-## Plugins never touch core (Teknium, May 2026)
+## プラグインはコアに触れない (Teknium、2026年5月)
 
-Plugins live in their own directory and work within the ABCs / hooks / `ctx` surface we provide.
-A plugin MUST NOT modify `run_agent.py`, `cli.py`, `gateway/run.py`, `hermes_cli/main.py`, etc.
-If it needs a capability the framework lacks, widen the **generic** plugin surface (new hook, new
-ctx method) and have the plugin use it — never hardcode plugin-specific logic into core (PR #5295
-removed 95 lines of hardcoded honcho argparse from `main.py`). Plugin setup goes through
-`hermes memory setup` → `provider.post_setup(hermes_home, config)`, never a parallel top-level
-command. A hook with no concrete consumer is speculative infrastructure and is rejected (root).
+プラグインは専用ディレクトリに置かれ、私たちが提供する ABC / フック / `ctx` のサーフェス内で動作します。
+プラグインは `run_agent.py`、`cli.py`、`gateway/run.py`、`hermes_cli/main.py` などを変更してはなりません (MUST NOT)。
+フレームワークに欠けている機能が必要な場合は、**汎用**のプラグインサーフェスを広げ (新しいフック、新しい
+ctx メソッド)、プラグインにそれを使わせてください — プラグイン固有のロジックをコアにハードコードしないでください (PR #5295
+は `main.py` からハードコードされた honcho argparse 95行を削除しました)。プラグインのセットアップは
+`hermes memory setup` → `provider.post_setup(hermes_home, config)` を通じて行い、並列のトップレベル
+コマンドは決して作らないでください。具体的な消費者を持たないフックは投機的なインフラであり、拒否されます (ルート)。
 
-## What may live in this tree (policy)
+## このツリーに置いてよいもの (ポリシー)
 
-- **No new in-tree memory providers (May 2026).** `plugins/memory/` is closed (byterover,
-  retaindb stay until their Oct 15 2026 removal). hindsight (Sep 2026), honcho, supermemory,
-  mem0, openviking and holographic (Oct 2026) moved to the plugin catalog — `plugin-catalog/<name>.yaml`, auto-installed by
-  `hermes_cli/memory_provider_migration.py` for homes still configured for them. Core keeps no
-  provider-specific code for them: a provider owns its profile setup through
-  `MemoryProvider.on_profile_created` / `on_profile_renamed` and its dashboard config file through
-  `storage=STORAGE_PROVIDER` + `read_config_fields` / `write_config_fields`. Host-side code that
-  still needs a provider module resolves it through `plugins.memory.import_provider_module`,
-  never a `plugins.memory.<name>` import. New
-  backends ship as standalone repos implementing the same `MemoryProvider` ABC, discovered through
-  the same path, integrated via `hermes memory setup` / `post_setup()`.
-- **Other features that leave core** (Home Assistant platform + toolset, Oct 2026 →
-  `plugin-catalog/homeassistant.yaml`; Spotify toolset → `plugin-catalog/spotify.yaml`; Singularity
-  terminal backend → `plugin-catalog/singularity.yaml`) keep their
-  names/config/env and get a row in
-  `hermes_cli/left_core_migration.py::LEFT_CORE` (catalog plugin + read-only "this home uses it"
-  predicate); `hermes update` and agent/gateway start install the plugin for homes that used it.
-  Installing and converting core-era state are separate steps: the toolset-scope conversion runs
-  once per home and row (`_left_core_scoped` in config.yaml) even when the plugin is already there.
-  The automatic install also happens once per home and row (`_left_core_installed`, written only
-  once the plugin dir exists): a later `hermes plugins remove` sticks, a failed install retries.
-  Core special cases become `PlatformEntry` seams the plugin sets (`trusted_inbound`,
-  `display_tier`, `shared_env_prefixes`), never a name check. A core `hermes auth <name>` login
-  becomes the plugin's own `hermes <name>` command (row field `cli`; the old spelling prints the new one),
-  and a nested core command becomes a top-level plugin command (`command` + `old_command`:
-  `hermes mcp serve` → `hermes mcp-serve`). A feature with no in-home signal (MCP clients live
-  outside Hermes) gets an `in_use` that is always False: hint only, never an automatic install.
-  A built-in terminal backend leaves its name off `BUILTIN_BACKEND_NAMES` so the plugin can register it
-  (row field `terminal_backend`: unknown-backend errors name the install command).
-  A model provider that leaves core (GitHub Copilot → `github-copilot`) lists its ids and aliases
-  (`providers`: unknown-provider errors name the install, runtime resolution installs it first for a
-  home that uses it, models.dev never stands in), the env core kept profile-managed (`profile_env`), the
-  executable/argv subset env writers refuse on every home (`launch_env`), and the hosts core served by
-  host for any provider name (`hosts`: a route there is use; a request rejected there names the install);
-  `notice` adds a per-home sentence to every outcome (a credential source the plugin no longer reads).
-- **No new third-party-product plugins (June 2026).** Observability/metrics backends, vendor SaaS
-  connectors, analytics dashboards, paid-service tie-ins ship as standalone plugin repos
-  (`~/.hermes/plugins/` or pip entry point) promoted in Discord `#plugins-skills-and-skins`. Reason:
-  every absorbed product is our maintenance burden against a fast-moving core for a backend we don't
-  own. `kanban/`, `disk-cleanup/` are precedent, not an invitation (Langfuse already moved out to the
-  official catalog plugin). Closing such a
-  PR is a coupling decision, not a quality judgment.
-- Reference/docs-companion plugins (`example-dashboard`, `strike-freedom-cockpit`,
-  `plugin-llm-example`, `plugin-llm-async-example`) live in
-  [`hermes-example-plugins`](https://github.com/NousResearch/hermes-example-plugins), not here.
+- **新規のツリー内メモリプロバイダーは追加しない（2026年5月）。** `plugins/memory/` はクローズされました（byterover と retaindb は 2026年10月15日の削除まで残ります）。hindsight（2026年9月）、honcho、supermemory、mem0、openviking、holographic（2026年10月）はプラグインカタログに移動しました — `plugin-catalog/<name>.yaml` で、それらに設定済みのホームには `hermes_cli/memory_provider_migration.py` が自動インストールします。コアはこれらのためのプロバイダー固有コードを保持しません。プロバイダーは `MemoryProvider.on_profile_created` / `on_profile_renamed` を通じて自らのプロファイル設定を、`storage=STORAGE_PROVIDER` + `read_config_fields` / `write_config_fields` を通じて自らのダッシュボード設定ファイルを所有します。依然としてプロバイダーモジュールを必要とするホスト側コードは、`plugins.memory.import_provider_module` を通じて解決し、`plugins.memory.<name>` インポートは決して使用しません。新しいバックエンドは、同じ `MemoryProvider` ABC を実装するスタンドアロンリポジトリとして提供され、同じパスを通じて発見され、`hermes memory setup` / `post_setup()` を通じて統合されます。
+- **コアから外れるその他の機能**（Home Assistant プラットフォーム＋ツールセット、2026年10月→
+  `plugin-catalog/homeassistant.yaml`。Spotifyツールセット→`plugin-catalog/spotify.yaml`。Singularity
+  ターミナルバックエンド→`plugin-catalog/singularity.yaml`）は、名前・設定・環境変数を維持したまま、
+  `hermes_cli/left_core_migration.py::LEFT_CORE`（カタログプラグイン＋読み取り専用の「このホームが使用中」述語）に行を追加します。
+  `hermes update`とエージェント／ゲートウェイの起動時に、使用していたホーム向けにプラグインをインストールします。
+  インストールとコア時代の状態の変換は別の手順です。ツールセット単位の変換は、プラグインが既に存在する場合でも、
+  ホームと行ごとに1回実行されます（config.yaml内の`_left_core_scoped`）。
+  自動インストールもホームと行ごとに1回実行されます（`_left_core_installed`。プラグインディレクトリが存在した場合のみ書き込まれます）。
+  後からの`hermes plugins remove`は維持され、失敗したインストールは再試行されます。
+  コアの特殊ケースは、プラグインが設定する`PlatformEntry`シームになります（`trusted_inbound`、
+  `display_tier`、`shared_env_prefixes`）。名前チェックにはなりません。
+  コアの`hermes auth <name>`ログインは、プラグイン独自の`hermes <name>`コマンドになります（行フィールド`cli`。古い表記は新しいものを表示します）。
+  ネストされたコアコマンドはトップレベルのプラグインコマンドになります（`command`＋`old_command`：
+  `hermes mcp serve`→`hermes mcp-serve`）。
+  ホーム内シグナルのない機能（MCPクライアントはHermesの外に存在）には、常にFalseの`in_use`が付きます。
+  ヒントのみで、自動インストールは行いません。
+  組み込みターミナルバックエンドは、プラグインが登録できるように`BUILTIN_BACKEND_NAMES`から名前を外します
+  （行フィールド`terminal_backend`。不明なバックエンドのエラーはインストールコマンドを名指しします）。
+  コアから外れるモデルプロバイダー（GitHub Copilot→`github-copilot`）は、そのIDとエイリアスを列挙します
+  （`providers`。不明なプロバイダーのエラーはインストールを名指しし、実行時の解決は使用中のホームに対して最初にインストールし、
+  models.devが代役になることはありません）。コアがプロファイル管理していた環境変数（`profile_env`）、
+  全ホームで環境変数ライターが拒否する実行ファイル／argvサブセット（`launch_env`）、
+  コアが任意のプロバイダー名に対してホストが提供していたホスト群（`hosts`。そこへのルートは使用を意味し、
+  そこで拒否されたリクエストはインストールを名指しします）。
+  `notice`は、すべての結果にホームごとの文を追加します（プラグインがもう読み取らない資格情報ソース）。
+- **新規のサードパーティ製プラグインは追加しない（2026年6月）。** オブザーバビリティ／メトリクスバックエンド、ベンダー製SaaSコネクタ、分析ダッシュボード、有料サービス連携は、独立したプラグインリポジトリ（`~/.hermes/plugins/`またはpipエントリポイント）として提供し、Discord `#plugins-skills-and-skins`で宣伝する。理由：取り込んだ製品はすべて、我々が所有していないバックエンドに対して、急速に進化するコアを維持しながら抱える保守負担となるからだ。`kanban/`、`disk-cleanup/`は前例であって招待ではない（Langfuseはすでに公式カタログプラグインへ移管済み）。そのようなPRをクローズすることは、品質評価ではなく結合判断である。
+- リファレンス／ドキュメント併設プラグイン（`example-dashboard`、`strike-freedom-cockpit`、`plugin-llm-example`、`plugin-llm-async-example`）は[`hermes-example-plugins`](https://github.com/NousResearch/hermes-example-plugins)に置かれ、ここには置かない。
 
-## Plugin catalog (`plugin-catalog/`, Sep 2026)
+## プラグインカタログ（`plugin-catalog/`、2026年9月）
 
-The ONLY discovery system for out-of-tree plugins. One YAML per entry, 40-hex SHA pin mandatory,
-human-merged via PR (`plugin-catalog/README.md` = admission policy, mirrored word for word in
-`website/docs/developer-guide/plugins/catalog-submission.md` with the submission guide; `plugin-catalog-ci.yml` clones
-each changed entry at its pin and runs `hermes plugins validate`). `removed.yaml` is the kill list —
-every install path (CLI, dashboard, TUI) refuses matches (repo URLs compared by canonical
-`host/owner/repo`, so `git@`/`ssh://`/`www.` spellings match); only the CLI has a loud
-`--allow-removed`, which is recorded on the install record and is the only thing that exempts an
-installed plugin from the same check at `update`, `enable` and load (`gate_manifest`). Catalog
-provenance lives on the installer-owned `.install-metadata.json` record (`catalog` block, sha =
-checked-out commit), NEVER in the tree: the in-tree `.hermes-catalog.json` is a convenience copy the
-Desktop reads for "Install here"; Python never trusts it (a repo can ship a forged one).
-Code: `hermes_cli/plugin_catalog.py` (loader, live refresh from
-`/docs/api/plugin-catalog.json` published by the docs build, in-tree fallback),
-`hermes_cli/plugins_cmd_catalog.py` (resolution, `.hermes-catalog.json` provenance sidecar,
-search/info/validate, re-pin on `update`, dashboard/TUI payloads). Never add a second name index:
-bare names resolve through the catalog or error.
+アウトオブツリー（ツリー外）プラグインの唯一の検出システム。エントリごとに1つのYAML、40桁16進数のSHAピン留めが必須。PR経由で人間がマージする（`plugin-catalog/README.md`＝受け入れポリシー。提出ガイドとともに`website/docs/developer-guide/plugins/catalog-submission.md`に逐語でミラーされる。`plugin-catalog-ci.yml`は変更された各エントリをそのピンでクローンし、`hermes plugins validate`を実行する）。`removed.yaml`はキルリストであり、すべてのインストール経路（CLI、ダッシュボード、TUI）が一致を拒否する（リポジトリURLは正規化された`host/owner/repo`で比較されるため、`git@`／`ssh://`／`www.`の表記は一致する）。CLIのみが明示的な`--allow-removed`を持ち、これはインストールレコードに記録され、インストール済みプラグインが`update`、`enable`およびロード時（`gate_manifest`）の同じチェックを免除される唯一のものである。カタログの出所は、インストーラーが所有する`.install-metadata.json`レコード（`catalog`ブロック、sha＝チェックアウトされたコミット）にあり、決してツリー内にはない。ツリー内の`.hermes-catalog.json`は、デスクトップが「ここにインストール」のために読み取る便宜上のコピーであり、Pythonはこれを決して信頼しない（リポジトリが偽造品を同梱できるため）。
 
-## Plugin kinds and their discovery systems
+コード：`hermes_cli/plugin_catalog.py`（ローダー。ドキュメントビルドが公開する`/docs/api/plugin-catalog.json`からのライブリフレッシュ、ツリー内フォールバック）、`hermes_cli/plugins_cmd_catalog.py`（解決、`.hermes-catalog.json`の出所サイドカー、検索／情報／検証、`update`での再ピン留め、ダッシュボード／TUIペイロード）。2つ目の名前インデックスを追加しないこと。素の名前はカタログ経由で解決するか、エラーになる。
 
-| Kind | Where | Discovery | Notes |
+## プラグインの種類とその検出システム
+
+| 種類 | 場所 | 検出方法 | 備考 |
 |---|---|---|---|
-| General | `plugins/<name>/`, `~/.hermes/plugins/`, `./.hermes/plugins/`, pip entry points | `PluginManager` (`hermes_cli/plugins.py`), later-wins | `register(ctx)` registers hooks (`pre_tool_call`, `post_tool_call`, `pre_llm_call`, `post_llm_call`, `on_session_start`, `on_session_end`), tools (`ctx.register_tool`), CLI subcommands (`ctx.register_cli_command` — argparse tree wired into `hermes` at startup, no `main.py` change), language packs (`provides_locales` in the manifest auto-registers `locales/<lang>[.tui|.desktop].yaml` via `ctx.register_locale_dir`; manifest-only packs need no `__init__.py`; `hermes_cli/plugin_validate_locales.py` validates them) |
-| Memory provider | `plugins/memory/<name>/` | `plugins/memory/__init__.py`: bundled → `$HERMES_HOME/plugins/` → `./.hermes/plugins/` (opt-in `HERMES_ENABLE_PROJECT_PLUGINS`) → `hermes_agent.memory_providers` entry points; **bundled-first** | Activated by name via `memory.provider`, so a dropped-in dir must not shadow a shipped one (reverse of general later-wins). Enumerates without importing. Implements `MemoryProvider` ABC (`agent/memory_provider.py`), orchestrated by `agent/memory_manager.py`: `sync_turn`, `prefetch`, `shutdown`, optional `post_setup`. `cli.py` with `register_cli(subparser)` is wired by `discover_plugin_cli_commands()` — only for the ACTIVE provider, so `hermes --help` stays clean |
-| Model provider | `plugins/model-providers/<name>/` | `providers/__init__.py._discover_providers()`, **lazy**, on first `get_provider_profile()`/`list_providers()`; bundled → `$HERMES_HOME/plugins/model-providers/` → legacy `providers/<name>.py` | `__init__.py` calls `providers.register_provider(ProviderProfile(...))` at load; **last-writer-wins** so a user plugin overrides a bundled profile. `PluginManager` records `kind: model-provider` manifests but does NOT import them (would double-instantiate); manifests without `kind:` are auto-coerced by source heuristic (`register_provider` + `ProviderProfile`) |
-| Context engine / image-gen / delegation / others | `plugins/context_engine/`, `plugins/image_gen/`, `plugins/delegation/`, ... | ABC + orchestrator + per-plugin directory | Plug into `agent/context_engine.py`, `agent/image_gen_provider.py`, `agent/delegation_provider.py` (`plugins/delegation/default` IS today's delegation routing) |
-| Platform adapters | `plugins/platforms/<name>/adapter.py` | gateway | Token-lock and scoped-secret rules in `gateway/AGENTS.md` (`irc`, `feishu` are canonical) |
+| 一般 | `plugins/<name>/`、`~/.hermes/plugins/`、`./.hermes/plugins/`、pip エントリポイント | `PluginManager`（`hermes_cli/plugins.py`）、後勝ち | `register(ctx)` がフック（`pre_tool_call`、`post_tool_call`、`pre_llm_call`、`post_llm_call`、`on_session_start`、`on_session_end`）、ツール（`ctx.register_tool`）、CLI サブコマンド（`ctx.register_cli_command` — 起動時に `hermes` へ配線される argparse ツリーで、`main.py` の変更は不要）、言語パック（マニフェスト内の `provides_locales` が `ctx.register_locale_dir` 経由で `locales/<lang>[.tui|.desktop].yaml` を自動登録。マニフェストのみのパックは `__init__.py` が不要。`hermes_cli/plugin_validate_locales.py` が検証する）を登録する |
+| メモリプロバイダ | `plugins/memory/<name>/` | `plugins/memory/__init__.py`：同梱 → `$HERMES_HOME/plugins/` → `./.hermes/plugins/`（オプトインの `HERMES_ENABLE_PROJECT_PLUGINS`）→ `hermes_agent.memory_providers` エントリポイント。**同梱優先** | `memory.provider` 経由で名前を指定して有効化するため、追加配置したディレクトリが出荷済みのものを覆い隠してはならない（一般の後勝ちとは逆）。インポートせずに列挙する。`MemoryProvider` ABC（`agent/memory_provider.py`）を実装し、`agent/memory_manager.py` が統括する：`sync_turn`、`prefetch`、`shutdown`、任意の `post_setup`。`register_cli(subparser)` を伴う `cli.py` は `discover_plugin_cli_commands()` によって配線される — アクティブなプロバイダのみを対象とするため、`hermes --help` はクリーンなまま保たれる |
+| モデルプロバイダー | `plugins/model-providers/<name>/` | `providers/__init__.py._discover_providers()`、**遅延**、最初の`get_provider_profile()`/`list_providers()`時。バンドル済み → `$HERMES_HOME/plugins/model-providers/` → レガシー`providers/<name>.py` | `__init__.py`は読み込み時に`providers.register_provider(ProviderProfile(...))`を呼び出す。**最後に書いた者が勝つ**ため、ユーザープラグインがバンドル済みプロファイルを上書きする。`PluginManager`は`kind: model-provider`のマニフェストを記録するが、インポートはしない（二重インスタンス化になるため）。`kind:`のないマニフェストは、ソースのヒューリスティック（`register_provider` + `ProviderProfile`）で自動的に強制変換される |
+| コンテキストエンジン / 画像生成 / 委譲 / その他 | `plugins/context_engine/`、`plugins/image_gen/`、`plugins/delegation/`、... | ABC + オーケストレーター + プラグインごとのディレクトリ | `agent/context_engine.py`、`agent/image_gen_provider.py`、`agent/delegation_provider.py`に接続する（`plugins/delegation/default`が今日の委譲ルーティング） |
+| プラットフォームアダプター | `plugins/platforms/<name>/adapter.py` | ゲートウェイ | `gateway/AGENTS.md`のトークンロックとスコープ付きシークレットのルール（`irc`、`feishu`が正規） |
 
-**Discovery timing pitfall:** `discover_plugins()` runs only as a side effect of importing
-`model_tools.py`. Code that reads plugin state without importing `model_tools.py` first must call
-`discover_plugins()` explicitly (idempotent). Hooks are invoked from `model_tools.py` (pre/post
-tool) and `run_agent.py` (lifecycle). A non-forced `discover_plugins()` short-circuits on `_discovered`: every
-mid-run load path (install/enable/update on any surface, `reload-plugins` verb) runs
-`discover_plugins(force=True)`, and `PluginManager.on_plugin_loaded` fires from inside that sweep for the
-newly loaded plugins with an activation summary (`hermes_cli/plugins_activation.py`: handlers live now;
-tools/prompt next session; `deferred.mcp_servers` until `mcp.reload`). Never emit that event from an RPC. Auxiliary LLM calls (titling, compression, MoA, vision, ...)
-fire `pre_auxiliary_call`/`post_auxiliary_call` from `agent/auxiliary_hooks.py` (payload = the
-`*_api_request` shape + `aux_task`); they never fire the turn-scoped `pre/post_api_request` (#79733). When a plugin changes a default, add a migration guard keyed
-on an "existing config" signal (`_explicitly_configured`) so existing users keep the old default.
+**ディスカバリのタイミングに関する落とし穴:** `discover_plugins()` は `model_tools.py` をインポートした副作用としてのみ実行されます。`model_tools.py` を先にインポートせずにプラグインの状態を読み取るコードは、`discover_plugins()` を明示的に呼び出す必要があります（冪等）。フックは `model_tools.py`（ツールの前後）と `run_agent.py`（ライフサイクル）から呼び出されます。強制されない `discover_plugins()` は `_discovered` で短絡します。実行途中のあらゆるロード経路（任意のサーフェスでのインストール/有効化/更新、`reload-plugins` 動詞）は `discover_plugins(force=True)` を実行し、`PluginManager.on_plugin_loaded` はそのスイープの内部から、新しくロードされたプラグインに対してアクティベーションのサマリー付きで発火します（`hermes_cli/plugins_activation.py`: ハンドラーは即時有効、ツール/プロンプトは次セッション、`deferred.mcp_servers` は `mcp.reload` まで）。そのイベントを RPC から発行してはなりません。補助的な LLM 呼び出し（タイトル付け、圧縮、MoA、ビジョンなど）は `agent/auxiliary_hooks.py` から `pre_auxiliary_call`/`post_auxiliary_call` を発火します（ペイロードは `*_api_request` の形状 + `aux_task`）。これらがターンスコープの `pre/post_api_request` を発火することはありません（#79733）。プラグインがデフォルトを変更する場合は、「既存の設定」シグナル（`_explicitly_configured`）をキーにした移行ガードを追加し、既存ユーザーが古いデフォルトを維持できるようにしてください。
 
-**Lifecycle hooks fire under the owning profile's scope, and the caller binds it.**
-`on_session_start`/`on_session_end`/`sync_turn`/`shutdown` are invoked from the turn (bound) AND
-from eviction, shutdown, `tui_gateway` teardown and cron completion (bound by the caller via
-`_run_release_in_profile_scope`, `_session_profile_runtime_scope`, `_profile_cron_scope`). One
-process serves several profiles, so a provider never caches `hermes_home` from `initialize()` as
-"the" home — key state by the home it is handed per call (`hermes_home_key()`) — and never reads
-`os.environ` for credentials (`agent.secret_scope.get_secret`; a `check_fn` too). Background
-work starts via `agent.memory_provider.spawn_context_thread`, never a bare `threading.Thread`,
-or the worker runs with no scope and fails closed (or writes into the launch profile's tenant).
-Platform plugins never mutate `os.environ`: YAML goes to `PlatformConfig.extra` through
-`_shared.apply_yaml_bridge`, gates through `platform_gate_env` (`gateway/AGENTS.md`).
+**ライフサイクルフックは所有プロファイルのスコープ下で発火し、呼び出し側がそれをバインドします。**
+`on_session_start`/`on_session_end`/`sync_turn`/`shutdown` は、ターン（バインド済み）から、および eviction、シャットダウン、`tui_gateway` のティアダウン、cron 完了時（呼び出し側が `_run_release_in_profile_scope`、`_session_profile_runtime_scope`、`_profile_cron_scope` 経由でバインド）から呼び出されます。1つのプロセスが複数のプロファイルにサービスを提供するため、プロバイダーは `hermes_home` を `initialize()` から「その」ホームとしてキャッシュすることはありません。呼び出しごとに渡されるホーム（`hermes_home_key()`）で状態をキー付けし、資格情報のために `os.environ` を読み取ることは決してありません（`agent.secret_scope.get_secret`。`check_fn` も同様）。バックグラウンド処理は `agent.memory_provider.spawn_context_thread` 経由で開始し、素の `threading.Thread` は決して使わないでください。さもないとワーカーがスコープなしで実行され、フェイルクローズするか（または起動プロファイルのテナントに書き込んでしまいます）。プラットフォームプラグインは `os.environ` を変更しません。YAML は `_shared.apply_yaml_bridge` 経由で `PlatformConfig.extra` に渡され、ゲートは `platform_gate_env`（`gateway/AGENTS.md`）経由です。
 
-## Plugin host boundary (`plugins.isolation: host`)
+## プラグインホスト境界（`plugins.isolation: host`）
 
-`in_process` (default) imports user plugins into Hermes. `host` runs every non-bundled plugin in a
-per-profile host process (`hermes_cli/plugin_host.py` parent side, `plugin_host_child.py` child,
-`plugin_host_wire.py` framed JSON protocol). The child hands plugins a `RemotePluginContext`; Hermes
-registers proxies (tools, hooks, commands, provider objects as subclasses of the ABC it checks).
-Invariants:
+`in_process`（デフォルト）はユーザープラグインを Hermes にインポートします。`host` はバンドルされていないすべてのプラグインを、プロファイルごとのホストプロセスで実行します（`hermes_cli/plugin_host.py` が親側、`plugin_host_child.py` が子、`plugin_host_wire.py` がフレーム化された JSON プロトコル）。子はプラグインに `RemotePluginContext` を渡し、Hermes はプロキシ（ツール、フック、コマンド、およびそれがチェックする ABC のサブクラスとしてのプロバイダーオブジェクト）を登録します。
 
-- **Every user-code import path routes to the host or refuses** — general plugins
-  (`plugins_loader`), memory / context engine / cron providers (`load_instance`), model-provider
-  profiles (`plugin_host_profiles.py`: credential-free extraction cached by file fingerprint, because
-  discovery runs while `hermes_cli.config`/`auth` import; overrides run by name in the host), dashboard
-  APIs (ASGI bridge). `plugins/plugin_loader.load_plugin_module` refuses any other synthetic-namespace
-  import. A new user-code loader MUST do the same.
-- **What cannot cross is one table:** `plugin_isolation.HOST_UNSUPPORTED_CTX_METHODS` (live gateway /
-  adapter objects). The runtime refusal and the static audit (`plugin_isolation_audit.py`, shown by
-  `hermes plugins validate/show`) both read it; `evals/plugin_isolation/audit_catalog.py` re-measures
-  the catalog.
-- **Values keep the provider ABC's declared types across the wire:** JSON carries dicts, lists and
-  scalars, so `plugin_host_wire.restore` rebuilds arguments (child) and results (parent) from the ABC's
-  annotations (`FetchResult`, `Path`, enums, a returned engine as a proxy). A value a core consumer
-  type-checks must be a dataclass annotated on the ABC method, or it arrives as `Record`/`Opaque`.
-- **A host never spawns a host** (`HERMES_PLUGIN_HOST_PROCESS=1` makes `isolation_mode()` in-process
-  there) and must not start while a module import holds its lock (model-provider discovery is the
-  known case).
-- **The isolated party cannot opt out when an operator pins it:** `isolation_mode()` / `host_launcher()`
-  read through the managed overlay (`load_config_readonly`), so `/etc/hermes/config.yaml` beats the
-  profile's own config. Never switch them to a raw user-config read.
-- Plugins stay tenant-unaware: no new API, same `ctx`. Per-profile env comes from
-  `served_profile_child_env`, so a host sees only its own profile's secrets.
+不変条件:
 
-## Native plugin compatibility contract (summary — canonical text in the docs page)
+- **すべてのユーザーコードのインポートパスはホストにルーティングされるか拒否される** — 汎用プラグイン（`plugins_loader`）、メモリ／コンテキストエンジン／cronプロバイダー（`load_instance`）、モデルプロバイダーのプロファイル（`plugin_host_profiles.py`：ファイルフィンガープリントでキャッシュされる資格情報なし抽出。`hermes_cli.config`／`auth`のインポート中にディスカバリが実行されるため。オーバーライドはホスト内で名前によって実行される）、ダッシュボードAPI（ASGIブリッジ）。`plugins/plugin_loader.load_plugin_module`はその他の合成名前空間インポートを拒否する。新しいユーザーコードローダーも同じことを行わなければならない。
+- **越境できないのは1つのテーブルだけ**：`plugin_isolation.HOST_UNSUPPORTED_CTX_METHODS`（ライブゲートウェイ／アダプタオブジェクト）。実行時の拒否と静的監査（`plugin_isolation_audit.py`、`hermes plugins validate/show`で表示される）の両方がこれを読み取る。`evals/plugin_isolation/audit_catalog.py`がカタログを再測定する。
+- **値はプロバイダーABCの宣言された型をワイヤー越しに維持する**：JSONはdict、リスト、スカラーを運ぶため、`plugin_host_wire.restore`はABCのアノテーション（`FetchResult`、`Path`、enum、プロキシとして返されるエンジン）から引数（子）と結果（親）を再構築する。コアコンシューマーが型チェックする値は、ABCメソッドでアノテーションされたdataclassでなければならない。さもなければ`Record`／`Opaque`として届く。
+- **ホストはホストを生成しない**（`HERMES_PLUGIN_HOST_PROCESS=1`がそこで`isolation_mode()`をインプロセスにする）し、モジュールインポートがそのロックを保持している間は起動してはならない（モデルプロバイダーのディスカバリが既知のケース）。
+- **隔離された当事者は、オペレーターがそれを固定した場合にオプトアウトできない**：`isolation_mode()`／`host_launcher()`は管理オーバーレイ（`load_config_readonly`）を通じて読み取るため、`/etc/hermes/config.yaml`はプロファイル自身の設定に勝る。これらを生のユーザー設定読み取りに切り替えてはならない。
+- プラグインはテナント非認識のまま：新しいAPIなし、同じ`ctx`。プロファイルごとのenvは`served_profile_child_env`から来るため、ホストは自分のプロファイルのシークレットだけを見る。
 
-Compatibility is a **behavior contract**, not a monolithic `PLUGIN_API_VERSION`, a manifest-wide
-native `api:` match, or version literals on unrelated payloads. Documented surfaces stay additive:
+## ネイティブプラグイン互換性契約（要約 — 正規のテキストはドキュメントページにあります）
 
-- Hook payload data is added as **keyword fields**; callbacks are signature-inspected so old narrow
-  signatures receive only the fields they declare and `**kwargs` callbacks get the full payload.
-- Never remove or rename `PluginContext` methods; new parameters are optional with defaults and
-  keyword-only where possible.
-- Unknown native manifest fields are ignored.
-- New provider methods get default implementations; optional callback kwargs are
-  signature-inspected, not forwarded unconditionally.
-- A local schema version exists only for a capability with a wire or persisted contract, and old
-  state/config/session replay is preserved or migrated.
-- Deprecations: once-per-process warning, documented replacement + migration note, ≥ 2 subsequent
-  minor releases before removal.
-- Compat tests load **frozen plugins through the real discovery path** and assert outcomes — never
-  exact registry/catalog counts, source-reading tests, or "a global version literal changed".
+互換性は**振る舞いの契約**であり、一枚岩の`PLUGIN_API_VERSION`、マニフェスト全体にわたるネイティブ`api:`の一致、または無関係なペイロード上のバージョンリテラルではありません。文書化されたサーフェスは追加的であり続けます：
 
-## Boundary lint (`scripts/boundary_lint.py`)
+- フックペイロードデータは**キーワードフィールド**として追加されます。コールバックはシグネチャ検査されるため、古い狭いシグネチャは宣言したフィールドのみを受け取り、`**kwargs`コールバックは完全なペイロードを受け取ります。
+- `PluginContext`メソッドを削除または名前変更しないでください。新しいパラメータはデフォルト値付きのオプションとし、可能な場合はキーワード専用にします。
+- 未知のネイティブマニフェストフィールドは無視されます。
+- 新しいプロバイダーメソッドにはデフォルト実装が提供されます。オプションのコールバックkwargsはシグネチャ検査され、無条件に転送されることはありません。
+- ローカルスキーマバージョンは、ワイヤまたは永続化された契約を持つ機能に対してのみ存在し、古い状態/設定/セッションのリプレイは保持または移行されます。
+- 非推奨化：プロセスごとに一度の警告、文書化された置き換えと移行ノート、削除前に2回以上の後続マイナーリリース。
+- 互換性テストは**実際のディスカバリーパスを通じて凍結プラグインを読み込み**、結果を検証します。正確なレジストリ/カタログ数、ソース読み取りテスト、または「グローバルバージョンリテラルが変更された」ことは決して行いません。
 
-CI fails when a bundled plugin imports a core name that is not in `hermes_cli/data/plugin_api.json`,
-or core imports a specific bundled plugin, more often than the committed baseline records. Fix it
-with a name already on that list, a `ctx` method or discovery. If nothing listed fits, add the seam
-in its own PR first, naming the plugin that needs it: prefer a `ctx` method or hook; otherwise list
-the name in `plugin_api.json` (`module:Name`), regenerate `public-api.md` with
-`scripts/gen_plugin_api_docs.py`, document it and add a behavior test. A listed name is published to
-every plugin author: never list one just to pass the lint.
-`--update` rewrites the whole baseline from the tree, so check that its diff holds only the lines
-you meant. Run it for an intended crossing (say why in the PR body), for an import moved to
-another file (the baseline counts per importing file), or after removing crossings, so the lower
-count sticks. Never run it just to turn CI green.
-Catalog plugins get the same rule from the other side: `scripts/ci/catalog_core_imports.py check`
-(Repository guards) warns, never fails, when a core PR removes a module or name a pinned catalog plugin
-imports, naming the core name, whether it is private, and each plugin's catalog entry, repo and line.
+## 境界リント（`scripts/boundary_lint.py`）
 
-## Internal import paths are not API
+CIは、バンドルされたプラグインが`hermes_cli/data/plugin_api.json`にないコアの名前をインポートした場合、またはコアが特定のバンドル済みプラグインをインポートした場合に、コミット済みベースラインが記録しているよりも頻繁に失敗します。すでにそのリストにある名前、`ctx`メソッド、またはディスカバリで修正してください。リストに該当するものが何もない場合は、まずそのシームを独自のPRで追加し、それを必要とするプラグインを指定してください。`ctx`メソッドまたはフックを優先し、それ以外の場合は`plugin_api.json`（`module:Name`）に名前をリストし、`scripts/gen_plugin_api_docs.py`で`public-api.md`を再生成し、文書化して動作テストを追加してください。リストされた名前はすべてのプラグイン作成者に公開されます。lintを通すためだけにリストしないでください。
 
-PR #102117 moved internals into `<stem>_<topic>` siblings. The temporary compat layer that kept the
-old import paths alive for external plugins was removed after its 2026-09-14 window; an old path now
-raises `ImportError`, surfaced as the plugin's load error in `hermes plugins list`. Plugins build on
-`ctx` and the documented ABCs. Never add re-export shims for an internal move; the one exception
-is the listed turn helpers pinned catalog plugins import (plugin guide § Turn helpers kept for pinned
-catalog plugins, removed with the `hermes_state` stand-in in v0.27.0). `hermes_cli/plugin_compat.py`
-survives only as three inert stubs that already-running pre-removal updaters import.
+`--update`はツリー全体からベースライン全体を書き換えるため、その差分に意図した行だけが含まれていることを確認してください。意図したクロッシングのために実行し（PR本文にその理由を記載）、別のファイルに移動したインポートのため（ベースラインはインポート元ファイルごとにカウントされます）、またはクロッシングを削除した後に実行して、より低いカウントが維持されるようにしてください。CIを緑にするためだけに実行しないでください。
 
-## Tests
+カタログプラグインには反対側から同じルールが適用されます。`scripts/ci/catalog_core_imports.py check`（Repository guards）は、コアのPRが固定されたカタログプラグインがインポートするモジュールまたは名前を削除した場合に、警告を発しますが、失敗はしません。コアの名前、それがプライベートかどうか、および各プラグインのカタログエントリ、リポジトリ、行を指定します。
 
-`tests/plugins/`. Load through real discovery with a temp `HERMES_HOME`; assert behaviour (tool
-registered, hook fired with expected kwargs), not counts. Opt-in telemetry rule applies to plugins
-too: no attribution tag ships by default.
+## 内部インポートパスはAPIではありません
+
+PR #102117 は内部実装を `<stem>_<topic>` の兄弟要素へ移動しました。旧 import パスを外部プラグイン向けに維持していた一時的な互換レイヤーは、2026-09-14 の期限を過ぎたため削除されました。旧パスは現在 `ImportError` を送出し、`hermes plugins list` ではプラグインのロードエラーとして表示されます。プラグインは `ctx` と文書化された ABC の上に構築してください。内部移動のために re-export のシムを追加しないでください。唯一の例外は、ピン留めされたカタログプラグインが import する、一覧にあるターンヘルパーです（プラグインガイド § ピン留めされたカタログプラグイン向けに維持されるターンヘルパー。v0.27.0 で `hermes_state` の代替とともに削除）。`hermes_cli/plugin_compat.py` は、削除前のアップデータが import する、3 つの不活性スタブとしてのみ残っています。
+
+## テスト
+
+`tests/plugins/`。一時的な `HERMES_HOME` を使った実際のディスカバリ経由でロードし、カウントではなく挙動（ツールが登録される、フックが期待どおりの kwargs で発火する）を検証してください。オプトインのテレメトリルールはプラグインにも適用されます。帰属タグはデフォルトでは付属しません。

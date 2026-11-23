@@ -120,10 +120,10 @@ def test_memory_guidance_respects_available_writes(stores, names, monkeypatch, t
                         _memory_enabled=stores[0], _user_profile_enabled=stores[1])
     prompt = build_system_prompt(agent)
     enabled = "memory" in names and any(stores)
-    assert ("Memory is the narrow exception" in prompt) == enabled
-    assert ("(skill_manage)" in prompt) == (enabled and "skill_manage" in names)
+    assert ("メモリに保存するのは" in prompt) == enabled
+    assert ("スキルに skill_manage で記録" in prompt) == (enabled and "skill_manage" in names)
     if enabled and not stores[0]:
-        assert "never target='memory'" in prompt
+        assert "target='memory' は使わないでください" in prompt
 
 
 class TestContextFileCwd:
@@ -247,7 +247,7 @@ class TestCodingContextBlock:
         monkeypatch.setenv("TERMINAL_CWD", str(tmp_path))
         agent = _make_agent(valid_tool_names=["read_file"], platform="cli")
         parts = _prompt_parts(agent)
-        assert "coding agent" in parts["stable"]
+        assert "開発エージェント" in parts["stable"]
         assert "Workspace" in parts["context"]
 
     def test_absent_when_off(self, monkeypatch, tmp_path):
@@ -257,13 +257,13 @@ class TestCodingContextBlock:
         # Drive the real path: force the resolved mode to "off" via config.
         with patch("agent.coding_context._coding_mode", return_value="off"):
             stable = _stable_prompt(agent)
-        assert "coding agent" not in stable
+        assert "開発エージェント" not in stable
 
     def test_absent_without_tools(self, monkeypatch, tmp_path):
         _init_code_repo(tmp_path)
         monkeypatch.setenv("TERMINAL_CWD", str(tmp_path))
         agent = _make_agent(valid_tool_names=[], platform="cli")
-        assert "coding agent" not in _stable_prompt(agent)
+        assert "開発エージェント" not in _stable_prompt(agent)
 
 
 def test_shared_project_context_precedes_worktree_bytes(monkeypatch, tmp_path):
@@ -429,7 +429,7 @@ class TestNamedProfileHintIntegration:
         with patch("agent.coding_context._coding_mode", return_value="off"):
             prompt = "\n\n".join(_prompt_parts(agent).values())
 
-        assert "Active Hermes profile: coder." in prompt
+        assert "Active TACT profile: coder." in prompt
         assert f"reads and writes {profile_home}/." in prompt
         # The doubled form must not appear anywhere.
         assert f"{profile_home}/profiles/coder" not in prompt
@@ -454,7 +454,7 @@ class TestNamedProfileHintIntegration:
         with patch("agent.coding_context._coding_mode", return_value="off"):
             prompt = "\n\n".join(_prompt_parts(agent).values())
 
-        assert "Active Hermes profile: default." in prompt
+        assert "Active TACT profile: default." in prompt
         assert f"under {root}/profiles/<name>/." in prompt
 
 
@@ -507,7 +507,7 @@ def test_coding_prompt_orders_shared_context_before_workspace(monkeypatch):
     # build the expectation the same way instead of hardcoding "/hermes".
     _home_str = str(Path("/hermes"))
     expected_profile = (
-        "Active Hermes profile: default. Other profiles (if any) live "
+        "Active TACT profile: default. Other profiles (if any) live "
         f"under {_home_str}/profiles/<name>/. Each profile has its own skills/, "
         "plugins/, cron/, and memories/ that affect a different session than "
         "this one. Do not modify another profile's skills/plugins/cron/memories "

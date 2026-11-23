@@ -1,37 +1,21 @@
-# pm/ — dependencies and Hermes environments
+# pm/ — 依存関係と Hermes 環境
 
-Applies on top of the root `AGENTS.md` (which carries the short form of the pinning rule).
+ルートの `AGENTS.md`（ピン留めルールの短縮版を記載）の上に適用される。
 
-## Dependency pinning policy
+## 依存関係のピン留めポリシー
 
-All dependencies carry upper bounds (litellm compromise #2796/#2810; Mini Shai-Hulud worm,
-May 2026). PyPI: `>=floor,<next_major` (`"httpx>=0.28.1,<1"`); pre-1.0: `<0.(minor+2)`
-(`>=0.29,<0.32`). Git URLs: 40-char commit SHA. GitHub Actions: SHA + `# vN` comment. CI-only
-Python requirements: `==exact`. A bare `>=X.Y.Z` is rejected by CI and reviewers.
-After changing `pyproject.toml`, run `hermes pm lock`, re-source `./activate`, and commit
-`pyproject.toml` with `uv.lock`. Reference: #2810 (bounds), #9801 (SHA pinning + audit CI).
+すべての依存関係は上限を付ける（litellm の侵害 #2796/#2810、Mini Shai-Hulud ワーム、2026年5月）。PyPI: `>=floor,<next_major`（`"httpx>=0.28.1,<1"`）。1.0 未満: `<0.(minor+2)`（`>=0.29,<0.32`）。Git URL: 40文字のコミット SHA。GitHub Actions: SHA + `# vN` コメント。CI 専用の Python 要件: `==exact`。素の `>=X.Y.Z` は CI とレビュアーに拒否される。
 
-PM owns Hermes Python dependency changes. Use `pm.sync_venv(['extra'], explicit=True)`
-for declared runtime extras, `hermes pm install` for setup/sync, and `hermes pm repair`
-for damaged dependencies. Do not mutate Hermes environments with raw pip or uv.
-Developer-only tools (`just`) are optional packages in `pm.testenv.DEVELOPER_TOOLS`: the
-`--test-environment` install provisions those the lockfile pins; a user install or desktop bundle
-never does.
-Use `pm.build_environment` for fresh build outputs and `pm.ensure_environment` for
-isolated tool environments. Callers receive an interpreter or tool path, not uv.
-Nix's declarative uv2nix builds and unrelated user projects remain independently owned.
+`pyproject.toml` を変更したら、`hermes pm lock` を実行し、`./activate` を再ソースし、`pyproject.toml` を `uv.lock` とともにコミットする。参照: #2810（上限）、#9801（SHA ピン留め + 監査 CI）。
 
-The `[tool.uv] exclude-newer = "3 days"` release-age check covers **Hermes's own dependencies
-only**, exact pins included, with one per-package exemption class: CA trust stores (`certifi`),
-whose revocation releases must reach the lock the day they ship (`exclude-newer-package`; nothing
-else goes there). It runs when Hermes LOCKS
-(`hermes pm lock`, CI's lock check), never on users' machines: every generated workspace drops the
-cutoff (`pm/workspace.py::_without_release_age`), so a mirror without upload times cannot break an
-install (#135589). Plugin resolution is unchanged by this: core's exact pins stay put, and a plugin
-may move a transitive core package within core's declared ranges
-(`tests/pm/test_workspace_build_inputs.py::test_plugin_can_move_compatible_transitive_but_not_exact_requirement`).
-Plugin `python_dependencies` follow the plugin's own policy. Teknium's rulings: "plugins dont have to abide by our 14 day rule … Only hermes'
-dependencies themselves have to"; dates are checked by us, not users; pinned deps need >3 days.
-JS: `minimumReleaseAge` (14 days) in `pnpm-workspace.yaml`; an exemption is one exact
-`- name@1.2.3  # why` line in `minimumReleaseAgeExclude`, which `hermes pm update --pnpm` names
-and later drops (`website/docs/reference/package-management.md` § Release age and package mirrors).
+PM は Hermes の Python 依存関係の変更を所有する。宣言されたランタイムの extra には `pm.sync_venv(['extra'], explicit=True)` を、セットアップ/同期には `hermes pm install` を、破損した依存関係には `hermes pm repair` を使う。生の pip や uv で Hermes 環境を変更してはならない。
+
+開発者専用ツール（`just`）は `pm.testenv.DEVELOPER_TOOLS` 内の任意パッケージである。`--test-environment` インストールはロックファイルがピン留めするものをプロビジョニングする。ユーザーインストールやデスクトップバンドルは決してそれをしない。
+
+新しいビルド出力には `pm.build_environment` を、隔離されたツール環境には `pm.ensure_environment` を使う。呼び出し側は uv ではなくインタープリタまたはツールパスを受け取る。
+
+Nix の宣言的 uv2nix ビルドと無関係なユーザープロジェクトは、引き続き独立して所有される。
+
+`[tool.uv] exclude-newer = "3 days"` の公開後の経過日数チェックは **Hermes 自身の依存関係のみ**を対象とし、完全一致ピンを含む。パッケージごとの免除クラスは1つだけ: CA トラストストア（`certifi`）。その失効リリースは出荷当日にロックへ到達しなければならない（`exclude-newer-package`。ここに他のものを置いてはならない）。これは Hermes がロックするとき（`hermes pm lock`、CI のロックチェック）に実行され、ユーザーのマシン上では決して実行されない。生成されたすべてのワークスペースはこのカットオフを落とす（`pm/workspace.py::_without_release_age`）。したがって、アップロード時刻のないミラーはインストールを壊さない（#135589）。プラグイン解決はこれによって変更されない。コアの完全一致ピンはそのまま維持され、プラグインはコアの宣言された範囲内で推移的なコアパッケージを移動できる（`tests/pm/test_workspace_build_inputs.py::test_plugin_can_move_compatible_transitive_but_not_exact_requirement`）。プラグインの `python_dependencies` はプラグイン自身のポリシーに従う。Teknium の裁定: 「プラグインは我々の14日ルールに従う必要はない……Hermes 自身の依存関係だけが従う必要がある」。日付はユーザーではなく我々が確認する。ピン留めする依存関係は、公開から3日を超えている必要がある。
+
+JS: `pnpm-workspace.yaml` 内の `minimumReleaseAge`（14日）。免除は `minimumReleaseAgeExclude` 内の1つの完全一致 `- name@1.2.3  # why` 行であり、`hermes pm update --pnpm` がそれを指名し、後で削除する（`website/docs/reference/package-management.md` § リリース年齢とパッケージミラー）。

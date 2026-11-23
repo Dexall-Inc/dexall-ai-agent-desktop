@@ -1,171 +1,90 @@
-# Desktop Engineering Guide
+# デスクトップエンジニアリングガイド
 
-How to build Hermes Desktop well. This is a judgment guide, not an inventory —
-it teaches the invariants and the reasoning behind them so a change fits the app
-even as files move. Read it with the repository `AGENTS.md` (root rules still
-apply), [`DESIGN.md`](./DESIGN.md) for the visual and interaction contract, and
-`src/AGENTS.md` for the backend contract, slash-palette curation, and Bot Mode.
-The reasoning behind the shorter sections below lives in [`ENGINEERING.md`](./ENGINEERING.md).
+Hermes Desktop をうまく作るための指針。これは目録ではなく判断のガイドである。ファイルが移動しても変更がアプリに適合するように、不変条件とその背後にある考え方を教える。リポジトリの `AGENTS.md`（ルートのルールは引き続き適用される）、視覚・操作の契約については [`DESIGN.md`](./DESIGN.md)、バックエンド契約・スラッシュパレットの厳選・Bot モードについては `src/AGENTS.md` と併せて読むこと。以下の短い節の背後にある考え方は [`ENGINEERING.md`](./ENGINEERING.md) にある。
 
-When a rule here and the code disagree, trust the code and fix whichever is
-wrong — but never break an invariant to make a change easier.
+ここでのルールとコードが食い違うときは、コードを信じて、どちらが間違っているかを修正せよ。ただし、変更を容易にするために不変条件を壊してはならない。
 
-## What this app is
+## このアプリが何であるか
 
-Desktop is its own native chat surface. It is not the browser dashboard and it
-does not embed the TUI. Three parties, each authoritative for one thing:
+Desktop はそれ自体がネイティブなチャットサーフェスである。ブラウザのダッシュボードではなく、TUI を埋め込むものでもない。三者がそれぞれ一つのことに権威を持つ。
 
-- **Electron** owns the machine: process lifecycle, native filesystem/git/
-  windows, install/update, and a narrow, typed capability bridge.
-- **The renderer** owns the experience: navigation, presentation, and ephemeral
-  interaction state.
-- **The agent backend** owns the work: sessions, tools, model calls, streaming.
+- **Electron** はマシンを所有する。プロセスライフサイクル、ネイティブなファイルシステム/git/ウィンドウ、インストール/更新、そして狭く型付けされた能力ブリッジ。
+- **レンダラー** は体験を所有する。ナビゲーション、プレゼンテーション、一時的な操作状態。
+- **エージェントバックエンド** は作業を所有する。セッション、ツール、モデル呼び出し、ストリーミング。
 
-Keep the seams clean. The renderer never reaches for Node or Electron directly;
-native power arrives through a deliberate capability, not a general escape hatch.
-Agent behavior lives behind the gateway, never reimplemented in React. When a
-change blurs a seam, that is the smell — fix the seam, don't widen it.
+継ぎ目をきれいに保て。レンダラーが Node や Electron に直接手を伸ばすことはない。ネイティブの力は、一般的な脱出口ではなく、意図的な能力を通じて届く。エージェントの振る舞いはゲートウェイの背後にあり、React で再実装してはならない。変更が継ぎ目を曖昧にしたら、それが悪い兆候である。継ぎ目を広げるのではなく、継ぎ目を修正せよ。
 
-## Decide state by authority
+## 権威によって状態を決める
 
-The first question for any piece of state is *who is allowed to be right about
-it*, not where it is convenient to store it. Put state with its authority:
+あらゆる状態について最初に問うべきことは、*誰がそれについて正しいとされることを許されているか* であり、どこに保存するのが便利かではない。状態をその権威とともに置け。
 
-- The **backend** is authoritative for anything another Hermes surface can also
-  change. Treat the renderer's copy as a cache of that truth.
-- **Electron** is authoritative for machine and runtime facts.
-- The **renderer** owns only what is purely about this window's presentation.
+- **バックエンド** は、別の Hermes サーフェスも変更しうるあらゆるものについて権威を持つ。レンダラーのコピーはその真実のキャッシュとして扱え。
+- **Electron** はマシンとランタイムの事実について権威を持つ。
+- **レンダラー** は、このウィンドウのプレゼンテーションにのみ関わるものを所有する。
 
-From that, everything else follows: shared renderer state lives in small stores
-owned by the feature that owns the concern; request-shaped server data that wants
-invalidation lives in the query layer; short-lived interaction detail stays in
-the component; hot coordination that must not paint stays in a ref. Reach for the
-narrowest home that still lets the state be correct. A new global store is a
-claim that many distant surfaces need it — earn that claim.
+そこから他のすべてが導かれる。共有レンダラー状態は、その関心を所有する機能が所有する小さなストアに置く。無効化を望むリクエスト形状のサーバーデータはクエリ層に置く。短命な操作の詳細はコンポーネントに置く。描画してはならないホットな調整は ref に置く。状態を正しくできる最も狭い居場所に手を伸ばせ。新しいグローバルストアは、多くの遠く離れたサーフェスがそれを必要としているという主張である。その主張を勝ち取れ。
 
-Persisted state must declare its scope in its own key: is this global, or does it
-belong to a connection, a profile, a stored session, a project, or a window?
-Getting the scope wrong is how one profile's setting bleeds into another.
+永続化された状態は、そのスコープを自身のキーで宣言しなければならない。これはグローバルか、それとも接続・プロファイル・保存済みセッション・プロジェクト・ウィンドウのいずれかに属するのか。スコープを誤ると、あるプロファイルの設定が別のプロファイルに漏れる。
 
-## Identity is not incidental
+## アイデンティティは付随的なものではない
 
-Sessions have durable, runtime and lineage-root identities; pick the one the surface needs and
-translate at the boundary. The user's message is durable at send (`prompt.submit` writes the session
-and user rows first and the turn adopts that row, #111868). A new profile-keyed localStorage family
-joins BOTH `migrateTilesForProfile` and `dropTilesForProfile`. A verifiably gone session
-(`goneSessionVerdict` → `'draft'`) drops to a fresh draft that adopts its unsent text once, with no
-toast, navigation or focus steal.
+セッションは、永続的なもの、ランタイムのもの、系統ルートのものというアイデンティティを持つ。サーフェスが必要とするものを選び、境界で変換せよ。ユーザーのメッセージは送信時に永続化される（`prompt.submit` はセッション行とユーザー行を最初に書き込み、ターンはその行を採用する、#111868）。新しいプロファイルキー付き localStorage ファミリーは、`migrateTilesForProfile` と `dropTilesForProfile` の両方に加わる。検証済みで消えたセッション（`goneSessionVerdict` → `'draft'`）は、未送信テキストを一度だけ採用する新しい下書きに落ちる。トーストもナビゲーションもフォーカス奪取もない。
 
-## Server truth is cached, not owned
+## サーバーの真実はキャッシュされるものであり、所有されるものではない
 
-Merge, don't clobber; paint optimistically and roll back visibly; a stale async result never
-overwrites newer intent (generation counters, request tokens); only the foreground surface publishes
-into the shared view; coalesce cosmetic updates but flush terminal transitions; keep reference
-identity on no-ops.
+マージせよ、上書きするな。楽観的に描画し、可視的にロールバックせよ。古い非同期結果が新しい意図を上書きすることはない（世代カウンター、リクエストトークン）。フォアグラウンドのサーフェスのみが共有ビューに公開する。化粧的な更新は合体させるが、終端遷移はフラッシュせよ。no-op では参照アイデンティティを保て。
 
-## Switching context is a re-home, not a reboot
+## コンテキストの切り替えは再起動ではなく再ホームである
 
-A connection/mode apply is a SOFT re-home (shell stays, gateway-bound stores wiped explicitly, then
-reconnect); a runtime `HERMES_HOME` change is a HARD re-home (reload); a live profile swap merges
-lists while background profiles keep streaming. After any swap the active socket, profile and
-connection atoms must agree.
+接続/モードの適用はソフトな再ホームである（シェルは残り、ゲートウェイに束縛されたストアは明示的に消去され、その後再接続する）。ランタイムの `HERMES_HOME` 変更はハードな再ホームである（リロード）。ライブのプロファイル切り替えはリストをマージし、バックグラウンドのプロファイルはストリーミングを続ける。切り替え後、アクティブなソケット・プロファイル・接続アトムは一致しなければならない。
 
-## Cross everything as an observable ladder
+## すべてを観測可能なはしごとして横断する
 
-Every seam (versions, profiles, local/remote/cloud, older backends) resolves through ONE ordered
-ladder per policy: precedence as data, a candidate trusted only after it is probed, a failed read
-falls to the next rung but a failed authoritative write surfaces or rolls back, a missing capability
-is not a transient failure, and retries are bounded and end in a recovery affordance. OAuth gateway
-connections mint a fresh ticket on every dial (only a confirmed 401/403 means reauth); a connection
-test exercises the leg you will actually use; `persist:` partition names avoid anything Electron
-percent-escapes (`electron/oauth-partition.ts`).
+あらゆる継ぎ目（バージョン、プロファイル、ローカル/リモート/クラウド、古いバックエンド）は、ポリシーごとに ONE の順序付きはしごを通じて解決される。優先順位はデータとして扱う。候補はプローブされた後にのみ信頼する。読み取りの失敗は次の段に落ちるが、権威ある書き込みの失敗は表面化するかロールバックする。能力の欠如は一時的な失敗ではない。再試行は有界であり、回復の手段で終わる。OAuth ゲートウェイ接続は、ダイヤルのたびに新しいチケットを発行する（確認された 401/403 のみが再認証を意味する）。接続テストは、実際に使う経路を試す。`persist:` パーティション名は、Electron がパーセントエスケープするものを避ける（`electron/oauth-partition.ts`）。
 
-## Guest content never opens anything by itself
+## ゲストコンテンツはそれ自体では何も開かない
 
-Artifact iframes and the preview `<webview>` never drive the OS browser on their own
-(GHSA-9f4c-93c8-jc8g): `setWindowOpenHandler` denies everything, the webview has no `allowpopups`,
-and a guest `target="_blank"` link reaches `hermes:openExternal` only through the
-`persist:hermes-preview` guest preload's trusted-click bridge, `http:`/`https:` only. Widening the
-partition key, the trusted-click gate or the scheme set reopens the advisory.
+アーティファクト iframe とプレビュー `<webview>` は、それ自体で OS ブラウザを駆動しない（GHSA-9f4c-93c8-jc8g）。`setWindowOpenHandler` はすべてを拒否し、webview に `allowpopups` はなく、ゲストの `target="_blank"` リンクは `persist:hermes-preview` ゲストプリロードの信頼されたクリックブリッジを通じてのみ `hermes:openExternal` に到達する。`http:`/`https:` のみ。パーティションキー、信頼されたクリックゲート、スキーム集合を広げると、勧告が再び開かれる。
 
-## Compatibility without carrying the past forever
+## 過去を永遠に持ち続けずに互換性を保つ
 
-Desktop and its runtime update on separate clocks, so a change can meet an older
-backend. Keep those users working: preserve the current feature, keep the
-fallback narrow and tied to an identified older runtime, and cover it with a
-test. A fallback that quietly degrades the feature it's meant to protect is worse
-than the crash it replaced.
+Desktop とそのランタイムは別々の時計で更新されるため、変更が古いバックエンドに遭遇することがある。それらのユーザーを動かし続けよ。現在の機能を維持し、フォールバックを狭く、特定された古いランタイムに結び付け、テストでカバーせよ。保護するはずの機能を静かに劣化させるフォールバックは、置き換えたクラッシュより悪い。
 
-## Keep the waist narrow, grow at the edges
+## 腰部を狭く保ち、端で成長させる
 
-The root contribution rubric governs here too. New capability should arrive at
-the smallest surface that solves it: extend what exists, add a feature locally,
-lean on an existing seam — before you invent a framework. The shell's internal
-registries are composition seams, not a public plugin ABI; do not build a
-universal extension system, a manifest, or a plugin adapter for a single
-consumer. Design a shared contract only once more than one real consumer proves
-its shape. "Plugin" means several unrelated things across Hermes — do not assume
-one surface's extension model runs in another.
+ルートの貢献ルーブリックもここで適用される。新しい能力は、それを解決する最小のサーフェスに届くべきである。既存のものを拡張し、機能をローカルに追加し、既存の継ぎ目に頼る。フレームワークを発明する前に。シェルの内部レジストリは構成の継ぎ目であり、公開プラグイン ABI ではない。単一の消費者のために普遍的な拡張システム、マニフェスト、プラグインアダプタを構築してはならない。共有契約は、複数の実消費者がその形状を証明した場合にのみ設計せよ。「プラグイン」は Hermes 全体でいくつかの無関係なものを意味する。あるサーフェスの拡張モデルが別のサーフェスで動くとは想定しないこと。
 
-When the new capability is an **agent-callable** one — a tool that acts on this
-renderer (open a pane, read the in-app browser, react to a message) — it is a
-property of the SESSION's client, not of the backend host. Wire its
-availability off the session source the app already sends on `session.create`
-(`source: 'desktop'`), never off an env var on the backend process: that
-process might be a remote or cloud gateway this app merely connected to. See
-`tools/AGENTS.md`, "Surface capability is a property of the SESSION."
+新しい能力が**エージェント呼び出し可能**なもの、つまりこのレンダラーに作用するツール（ペインを開く、アプリ内ブラウザを読む、メッセージに反応する）である場合、それはバックエンドホストではなく SESSION のクライアントのプロパティである。その可用性を、アプリが `session.create` で既に送信しているセッションソース（`source: 'desktop'`）から配線せよ。バックエンドプロセスの環境変数から決して配線しないこと。そのプロセスは、このアプリが単に接続したリモートまたはクラウドのゲートウェイかもしれない。`tools/AGENTS.md` の「Surface capability is a property of the SESSION.」を参照。
 
-## Respect the person using it
+## それを使う人を尊重する
 
-Design and engineering meet at intent. The user's attention and context are
-sacred:
+デザインとエンジニアリングは意図で出会う。ユーザーの注意とコンテキストは神聖である。
 
-- Never navigate, move focus, or open a surface because something *happened* in
-  the background. Offer; don't hijack.
-- The states around loading are distinct experiences — empty, loading,
-  reconnecting, degraded/stale, and exhausted-recovery each deserve their own
-  honest copy and their own way out.
-- Keyboard ownership follows focus. The focused surface wins its keys; one
-  cancel gesture does exactly one thing.
-- Expensive, stateful surfaces (terminals, live tools) stay alive when hidden.
-  Visibility is not lifecycle.
+- バックグラウンドで何かが *起こった* からといって、ナビゲートしたり、フォーカスを動かしたり、サーフェスを開いたりしてはならない。提供せよ。乗っ取るな。
+- ローディング周辺の状態は別々の体験である。空、ローディング、再接続、劣化/古い、回復の尽き、それぞれが独自の正直なコピーと独自の出口を持つべきである。
+- キーボードの所有権はフォーカスに従う。フォーカスされたサーフェスがそのキーを勝ち取る。1 つのキャンセルジェスチャは正確に 1 つのことをする。
+- 高価で状態を持つサーフェス（ターミナル、ライブツール）は、隠れているときも生き続ける。可視性はライフサイクルではない。
 
-## Make it feel instant
+## 即座に感じさせる
 
-Performance is a feature the user feels, especially in drag, resize, scroll,
-typing, streaming, and terminals. The principles are timeless even as the code
-changes: keep hot-path state local or narrowly derived; don't subscribe heavy
-trees to per-frame updates; coalesce pointer work; avoid reading layout right
-after writing style; and don't mount expensive content mid-gesture. Prove speed
-against realistic content — a fast empty demo proves nothing about a long
-transcript. If motion is masking latency, remove the motion, don't tune it.
+パフォーマンスはユーザーが感じる機能である。特にドラッグ、リサイズ、スクロール、タイピング、ストリーミング、ターミナルにおいて。コードが変わっても原則は不変である。ホットパスの状態をローカルまたは狭く導出されたものに保つ。重いツリーを毎フレームの更新に購読しない。ポインタ作業を合体させる。スタイルを書いた直後にレイアウトを読むのを避ける。ジェスチャの途中で高価なコンテンツをマウントしない。現実的なコンテンツに対して速度を証明せよ。速い空のデモは、長いトランスクリプトについて何も証明しない。モーションがレイテンシを隠しているなら、モーションを調整するのではなく、取り除け。
 
-## Testing as a habit of proof
+## 証明の習慣としてのテスト
 
-Test the behavior that would actually break a user, not a snapshot of today's
-data. Favor invariants over frozen values. Exercise the real path for anything
-at a seam — resolver precedence and its failure rungs, identity and scope
-boundaries, optimistic rollback and stale-response ordering, and both sides of a
-local/remote adapter with its profile routing intact. Match how the suite is
-actually run rather than inventing a command; when in doubt, read the scripts.
+今日のデータのスナップショットではなく、実際にユーザーを壊す振る舞いをテストせよ。凍結された値よりも不変条件を優先せよ。継ぎ目にあるものについては実際の経路を試せ。リゾルバの優先順位とその失敗段、アイデンティティとスコープの境界、楽観的ロールバックと古い応答の順序付け、プロファイルルーティングを保ったローカル/リモートアダプタの両側。スイートが実際にどう実行されるかに合わせ、コマンドを発明するな。疑わしいときはスクリプトを読め。
 
-## The taste test before you hand off
+## 引き渡す前の味見テスト
 
-- Does every piece of state live with its authority, at the narrowest scope?
-- Would a background event ever steal the foreground or the user's focus?
-- Does each resolver have one home, a validated ladder, and a bounded, recoverable
-  end?
-- Do local, remote, and profile routing still agree?
-- Does async failure leave a usable UI and a way forward?
-- Do hot interactions stay cheap under realistic load?
-- Does the change pass the [`DESIGN.md`](./DESIGN.md) checklist and update all
-  locales?
+- すべての状態がその権威とともに、最も狭いスコープで置かれているか。
+- バックグラウンドのイベントがフォアグラウンドやユーザーのフォーカスを奪うことはないか。
+- 各リゾルバが 1 つの居場所、検証されたはしご、有界で回復可能な終端を持つか。
+- ローカル、リモート、プロファイルのルーティングがまだ一致しているか。
+- 非同期の失敗が使える UI と前進する道を残すか。
+- ホットな操作が現実的な負荷の下で安価に保たれるか。
+- 変更が [`DESIGN.md`](./DESIGN.md) のチェックリストを通過し、すべてのロケールを更新するか。
 
-If any answer is "not sure," that's the part to go verify.
+いずれかの答えが「確かでない」なら、それが検証すべき部分である。
 
-## Nous free tier: state is pulled, never latched in the renderer
+## Nous 無料枠：状態は引き出されるものであり、レンダラーにラッチされない
 
-`free_tier.status` / `free_tier.ack_notice` are the only source: the ready screen and the own-key
-strip render the same `notice_pending` state, with no localStorage latch, and every entry point
-opens the one sign-in dialog. Branch on `free_tier_row` / `free_tier`, never on provider display
-names. Long form: `ENGINEERING.md`.
+`free_tier.status` / `free_tier.ack_notice` が唯一のソースである。準備画面とオウンキーストリップは同じ `notice_pending` 状態を描画し、localStorage ラッチはなく、すべての入口が 1 つのサインイン画面を開く。`free_tier_row` / `free_tier` で分岐せよ。プロバイダの表示名で決して分岐しないこと。詳細は `ENGINEERING.md`。

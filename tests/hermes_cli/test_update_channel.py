@@ -390,3 +390,14 @@ def test_doctor_channel_records_are_read_only(tmp_path, monkeypatch, kind, expec
     assert [(key, reason) for key, _, reason in stale_channel_records(config)] == (
         [(key, expected)] if expected else [])
     assert config == before
+
+
+def test_dexall_source_channel_tracks_develop_without_upstream_sync():
+    from hermes_cli.source_releases import resolve_source_target
+    from hermes_cli.update_cmd_git import _is_fork
+
+    target = resolve_source_target("main")
+    assert target.repository == "Dexall-Inc/dexall-ai-agent"
+    assert target.branch == "develop"
+    assert not _is_fork("git@github.com:Dexall-Inc/dexall-ai-agent.git")
+    assert resolve_source_target("main", repository="example/another-fork").branch == "main"

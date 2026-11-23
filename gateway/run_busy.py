@@ -16,7 +16,7 @@ import functools
 import json
 import os
 import time
-from agent.i18n import DEFAULT_LANGUAGE, t
+from agent.i18n import t
 from agent.session_activity import format_iteration_progress
 from gateway.config import Platform
 from gateway.platforms.base import EphemeralReply
@@ -36,7 +36,7 @@ def approval_input_words(input_key: str) -> tuple[str, ...]:
     "yes". Lower-cased, de-duplicated, order preserved (English first)."""
     seen: dict[str, None] = {}
     key = f"approval.inputs.{input_key}"
-    for raw in (t(key, lang=DEFAULT_LANGUAGE), t(key)):
+    for raw in (t(key, lang="en"), t(key)):
         if raw == key:  # catalog miss: t() echoes the key
             continue
         for word in raw.split(","):

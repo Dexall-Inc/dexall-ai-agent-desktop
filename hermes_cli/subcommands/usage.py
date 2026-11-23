@@ -61,13 +61,13 @@ def cmd_usage(args: argparse.Namespace) -> int:
 def build_usage_parser(subparsers) -> None:
     """Attach the ``usage`` subcommand to ``subparsers``."""
     usage_parser = subparsers.add_parser(
-        "usage", help="Show account rate-limit windows (the /usage block) without starting a session",
-        description="Fetch the configured provider's account limits (Codex 5h/weekly windows, plan, banked "
-                    "resets; Anthropic OAuth windows; OpenRouter credits) — the same block the /usage slash "
-                    "command prints — and exit. Exit code 1 when no credential is configured or the fetch fails.",
+        "usage", help="セッションを開始せずにアカウントの利用上限を表示する（/usage と同じ内容）",
+        description="設定したプロバイダーのアカウント上限を取得して終了します。Codex の5時間・週単位の上限、"
+                    "プラン、繰り越しリセット枠、Anthropic OAuth の上限、OpenRouter のクレジットを表示します。"
+                    "/usage と同じ内容です。認証情報が未設定か取得に失敗した場合は終了コード1を返します。",
     )
     usage_parser.add_argument(
-        "--provider", default=None, help="Provider to query (default: the configured model provider)")
+        "--provider", default=None, help="照会先のプロバイダー（既定: 設定済みのモデルプロバイダー）")
     usage_parser.add_argument(
-        "--json", action="store_true", help="Print one JSON document instead of the human-readable block")
+        "--json", action="store_true", help="読みやすい表示の代わりに、単一の JSON 文書を出力する")
     usage_parser.set_defaults(func=cmd_usage)

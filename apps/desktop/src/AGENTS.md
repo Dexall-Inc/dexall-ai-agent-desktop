@@ -1,113 +1,120 @@
-# apps/desktop/src/ — backend contract, slash palette, Bot Mode
+# apps/desktop/src/ — バックエンド契約、スラッシュパレット、Bot モード
 
-Applies on top of `apps/desktop/AGENTS.md` (the judgment guide) and the root `AGENTS.md`.
-Root TypeScript style rules apply.
+`apps/desktop/AGENTS.md`（判断ガイド）とルートの `AGENTS.md` の上に適用される。
+ルートの TypeScript スタイル規則が適用される。
 
-## Desktop local execution belongs to the canonical gateway
+## デスクトップのローカル実行は正規のゲートウェイに属する
 
-Electron + React + nanostores (`@assistant-ui/react`) talks JSON-RPC over the existing
-`@hermes/shared` client. Normal local primary and pooled launches invoke
-`hermes gateway ensure --json`, consume its credential-free endpoint, and authenticate
-WebSockets with fresh private control tickets. The app never acquires the gateway PID as
-an owned child. Closing, switching or evicting a Desktop connection disconnects the viewer;
-only explicit gateway lifecycle commands stop the owner.
+Electron + React + nanostores（`@assistant-ui/react`）は、既存の
+`@hermes/shared` クライアントを介して JSON-RPC で通信する。通常のローカルプライマリ起動および
+プール起動は `hermes gateway ensure --json` を呼び出し、その資格情報不要のエンドポイントを消費し、
+新しいプライベート制御チケットで WebSocket を認証する。アプリはゲートウェイの PID を
+所有子プロセスとして取得することはない。Desktop 接続を閉じる、切り替える、または追い出すと
+ビューアが切断される。オーナーを停止するのは明示的なゲートウェイライフサイクルコマンドのみ。
 
-Native tickets cross the private preload IPC transiently, are removed from the URL before
-WebSocket construction, and are offered as subprotocols. Electron removes Origin only for
-an unexpired one-use dial bound to the requesting window. No public dashboard token is
-scraped or added to the public connection descriptor. SSH/URL intent retains its existing
-remote resolution and exposure lifecycle; a remote failure must never start a local owner.
+ネイティブチケットはプライベートな preload IPC を一時的に通過し、WebSocket 構築前に URL から
+削除され、サブプロトコルとして提供される。Electron は、要求元ウィンドウにバインドされた
+未期限の一回限りのダイヤルに対してのみ Origin を削除する。公開ダッシュボードトークンは
+スクレイプされず、公開接続記述子に追加されることもない。SSH/URL インテントは既存の
+リモート解決と公開ライフサイクルを維持する。リモート障害でローカルオーナーを起動してはならない。
 
-The gateway `gateway ensure` attaches to is **one multiplexing owner per home**: `HERMES_DESKTOP=1`
-is not how the app finds it, and no per-profile `hermes serve --port 0` child is spawned. One
-gateway process serves sessions from several homes (`tui_gateway/AGENTS.md` § Profile scope); a
-served secondary answers through the multiplexer's control socket (`GatewayEndpoint.control_home`).
-Remote connections (SSH, URL+token, Cloud) likewise reach a backend that may serve several profiles
-from one process. Every lifecycle/status/settings REST call carries `?profile=` (or the `profile`
-param) and every new-session tile records an owner route; a backend-side scope fix is probed twice —
-with the profile as the gateway's own launch home and as a secondary served by one process.
+`gateway ensure` が接続するゲートウェイは、**ホームごとに 1 つの多重化オーナー**である。
+`HERMES_DESKTOP=1` はアプリがそれを見つける方法ではなく、プロファイルごとの
+`hermes serve --port 0` 子プロセスは生成されない。1 つのゲートウェイプロセスが複数のホームの
+セッションにサービスを提供する（`tui_gateway/AGENTS.md` § プロファイルスコープ）。
+サービス提供されるセカンダリは、多重化器の制御ソケット（`GatewayEndpoint.control_home`）を介して応答する。
+リモート接続（SSH、URL+トークン、Cloud）も同様に、1 つのプロセスから複数のプロファイルに
+サービスを提供するバックエンドに到達する。すべてのライフサイクル/ステータス/設定 REST 呼び出しは
+`?profile=`（または `profile` パラメータ）を運び、すべての新規セッションタイルはオーナールートを記録する。
+バックエンド側のスコープ修正は 2 回プローブされる — プロファイルをゲートウェイ自身の起動ホームとして、
+および 1 つのプロセスによってサービス提供されるセカンダリとして。
 
-This migration requires the runtime's canonical GUI creation policy and a private HTTP
-API credential path. Do not bypass missing runtime capabilities by relabeling GUI sessions
-as CLI, dropping launch options, or falling back to an independent local serve owner.
+この移行には、ランタイムの正規の GUI 作成ポリシーとプライベート HTTP API 資格情報パスが必要である。
+欠落したランタイム機能を、GUI セッションを CLI として再ラベル付けしたり、起動オプションを
+落としたり、独立したローカル serve オーナーにフォールバックしたりして回避してはならない。
 
-## Slash commands: curated client-side, dispatched to the backend
+## スラッシュコマンド: キュレーションはクライアント側、ディスパッチはバックエンドへ
 
-- The backend already provides everything: `commands.catalog` and `complete.slash` include built-ins,
-  user `quick_commands`, AND skill-derived commands. No new RPC is needed to see skills.
-- `src/lib/desktop-slash-commands.ts` is the load-bearing file: `DESKTOP_COMMAND_SPECS` (built-ins
-  and their desktop surfaces) + the block-list. A command's desktop disposition (terminal-only /
-  messaging-only / settings-owned / advanced / hidden) is authored ONCE, as `desktop=` on its
-  `CommandDef` in `hermes_cli/commands.py`; the live `commands.catalog` carries it, and
-  `src/lib/desktop-slash-registry.json` (regenerate with `scripts/dump_desktop_slash_registry.py`;
-  `tests/hermes_cli/test_desktop_slash_registry.py` + the vitest file fail on drift) is the offline
-  fallback. Only names the Python registry has never heard of (`/density`, `/details`, `/logs`,
-  `/mouse` — Ink-local; `/pets`) live in `TS_ONLY_NO_DESKTOP_SURFACE`. `isDesktopSlashCommand(name)`
-  gates **execution** (true
-  for built-ins AND any non-built-in so typed skill/quick commands run);
-  `isDesktopSlashSuggestion(name)` gates **discovery** — used by BOTH completion paths in
-  `app/chat/composer/hooks/use-slash-completions.ts` and by `filterDesktopCommandsCatalog`;
-  `isDesktopSlashExtensionCommand(name)` is true for anything not a known built-in, and both
-  suggestion and catalog paths let extensions through (the allow-list once silently dropped every
-  skill/quick command from completions even though they executed when typed).
-- Dispatch: `app/session/hooks/use-prompt-actions/slash.ts` (`runSlash`) — desktop-owned built-ins
-  (`/skin`, `/help`, `/new`, ...) locally or via `commands.catalog`; everything else `slash.exec` →
-  `command.dispatch` fallback; a skill command resolves to `{type: "skill", message}` and is
-  submitted as a normal prompt.
+- バックエンドはすでにすべてを提供している: `commands.catalog` と `complete.slash` は組み込み、
+  ユーザー `quick_commands`、およびスキル由来のコマンドを含む。スキルを見るために新しい RPC は不要。
+- `src/lib/desktop-slash-commands.ts` が要となるファイル: `DESKTOP_COMMAND_SPECS`（組み込みと
+  そのデスクトップサーフェス）+ ブロックリスト。コマンドのデスクトップ上の扱い
+  （ターミナルのみ / メッセージングのみ / 設定所有 / 上級 / 非表示）は、`hermes_cli/commands.py` の
+  `CommandDef` に `desktop=` として **一度だけ** 記述される。ライブの `commands.catalog` がそれを運び、
+  `src/lib/desktop-slash-registry.json`（`scripts/dump_desktop_slash_registry.py` で再生成;
+  `tests/hermes_cli/test_desktop_slash_registry.py` + vitest ファイルがドリフト時に失敗する）が
+  オフラインフォールバックである。Python レジストリが一度も知らない名前のみ
+  （`/density`、`/details`、`/logs`、`/mouse` — Ink ローカル; `/pets`）が
+  `TS_ONLY_NO_DESKTOP_SURFACE` に存在する。`isDesktopSlashCommand(name)` は **実行** をゲートする
+  （組み込み AND 任意の非組み込みに対して true なので、型付きスキル/クイックコマンドが実行される）。
+  `isDesktopSlashSuggestion(name)` は **発見** をゲートする — `app/chat/composer/hooks/use-slash-completions.ts` の
+  両方の補完パスと `filterDesktopCommandsCatalog` の両方で使用される。
+  `isDesktopSlashExtensionCommand(name)` は既知の組み込み以外のすべてに対して true であり、
+  提案パスとカタログパスの両方が拡張を通す（許可リストはかつて、入力時に実行されたにもかかわらず
+  すべてのスキル/クイックコマンドを補完から静かに落としていた）。
+- ディスパッチ: `app/session/hooks/use-prompt-actions/slash.ts`（`runSlash`）— デスクトップ所有の組み込み
+  （`/skin`、`/help`、`/new` など）をローカルまたは `commands.catalog` 経由で実行。それ以外は `slash.exec` →
+  `command.dispatch` フォールバック。スキルコマンドは `{type: "skill", message}` に解決され、
+  通常のプロンプトとして送信される。
 
-**Rule:** palette curation hides noise (terminal-only / messaging-only built-ins), NEVER
-user-activated extensions. If you tighten `desktop-slash-commands.ts`, keep
-`isDesktopSlashExtensionCommand` flowing into both paths. Test: from `apps/desktop`,
-`pnpm exec vitest run src/lib/desktop-slash-commands.test.ts` (workspace deps install at the repo root).
+**規則:** パレットのキュレーションはノイズ（ターミナルのみ / メッセージングのみの組み込み）を隠す。
+ユーザー起動の拡張は決して隠さない。`desktop-slash-commands.ts` を厳格化する場合は、
+`isDesktopSlashExtensionCommand` を両方のパスに流し続けること。テスト: `apps/desktop` から
+`pnpm exec vitest run src/lib/desktop-slash-commands.test.ts`（ワークスペース依存関係はリポジトリルートでインストール）。
 
-## Bot Mode (`src/plugins/hermes-bots/`) — one bot = ONE canonical forever-chat, identified by NAME
+## Bot モード（`src/plugins/hermes-bots/`）— 1 ボット = 1 つの正規の永遠チャット、NAME で識別
 
-Each bot is a Hermes **profile** with a persistent identity. This invariant regressed repeatedly,
-cost users conversation history each time, and is not open for re-litigation in a routine PR.
+各ボットは永続的なアイデンティティを持つ Hermes **プロファイル**である。この不変条件は繰り返し
+退行し、そのたびにユーザーの会話履歴を失わせた。日常的な PR で再議論する余地はない。
 
-The chat's only identity is **(profile, session titled exactly "Bot Chat")**; the state DB's
-UNIQUE(title) index makes that pair a registry of at most one row. Clicking a bot row:
-1. **Resolve the registry, every time:** `session.list {title, include_hidden: true}` (indexed,
-   window-free; hidden rows resolve because canonical chats are always hidden; compression lineages
-   resolve to the live tip). Row exists → open it. That is the whole happy path.
-2. **No row → create it**, titled `Bot Chat`, born hidden, kicked off with the bot's intro. Creation
-   adopts-before-minting: it re-runs the lookup first so a concurrent/pre-existing row is opened,
-   never forked (`set_session_title` silently drops conflicting titles — returns 0 rows — which is how
-   the 2026-08 infinite fork loop started).
+チャットの唯一のアイデンティティは **（プロファイル、正確に「Bot Chat」と題されたセッション）** である。
+状態 DB の UNIQUE(title) インデックスにより、そのペアは最大 1 行のレジストリになる。ボット行をクリックする:
+1. **毎回レジストリを解決する:** `session.list {title, include_hidden: true}`（インデックス付き、
+   ウィンドウなし。正規チャットは常に非表示なので非表示行も解決される。圧縮系統はライブの先端に解決される）。
+   行が存在する → それを開く。それがハッピーパス全体である。
+2. **行がない → 作成する**、`Bot Chat` と題し、非表示で生まれ、ボットのイントロで開始される。作成は
+   ミント前に採用する: 最初にルックアップを再実行するので、並行/既存の行は開かれ、決してフォークされない
+   （`set_session_title` は競合するタイトルを静かに落とす — 0 行を返す — これが
+   2026-08 の無限フォークループが始まった方法である）。
 
-**There is NO session-id pin.** The old design stored a pointer in `ui_meta['hermes-bots'].chat`;
-five hardening waves (#88690, #90732, #90751, the #91791 revert, #92042) each guarded a new way it
-dangled or was stolen (rows[0] steals, `last_session` adoptions, transient clears, a pin re-anchored
-onto a cron session). A name cannot dangle; legacy `chat` keys in ui_meta are ignored and dropped.
-**Recency must never win** (#91791 → #92042): canonical Bot Chats are unconditionally hidden from the
-Sessions sidebar, so the bot row is the ONLY door — "newest visible session wins" walls the whole
-relationship off behind a row that previews one session and opens another. Side-chats ("New chat
-with this agent") are not plumbing-titled, stay visible in the sidebar, and are never the row's target.
+**セッション ID ピンは存在しない。** 旧設計は `ui_meta['hermes-bots'].chat` にポインタを保存していた。
+5 回のハードニングウェーブ（#88690、#90732、#90751、#91791 のリバート、#92042）はそれぞれ、
+それがぶら下がるか盗まれる新しい方法を守っていた（rows[0] の盗用、`last_session` の採用、
+一時的なクリア、cron セッションに再アンカーされたピン）。名前はぶら下がらない。ui_meta 内の
+レガシー `chat` キーは無視され、破棄される。
+**新しさが勝ってはならない**（#91791 → #92042）: 正規の Bot Chat は Sessions サイドバーから
+無条件に非表示にされるので、ボット行が唯一の扉である — 「最も新しい可視セッションが勝つ」は、
+1 つのセッションをプレビューし別のセッションを開く行の背後に関係全体を壁で囲む。
+サイドチャット（「このエージェントと新しいチャット」）は配管タイトルではなく、サイドバーに
+可視のままであり、行のターゲットになることは決してない。
 
-Reviewer corollaries: no per-bot session browser (removed in #90732; don't add it back). Reject any
-stored session-id pointer as canonical identity — including "as a fallback tier" or "for
-verification". Reject anything consulting recency/visibility/"where the user left off" for the row's
-target; such reports are about side-chats and the fix belongs in the Sessions sidebar hide-sweep.
-The gateway reports the registry row as `canonical_session` on `profiles.list` (resolved server-side
-by title); roster preview, activity signals, and the `/new`→`/compact` guard all read it, so preview
-identity and click identity are the same row by construction. Contract tests:
-in `src/plugins/hermes-bots/`: `canonical-chat-registry.test.ts` (tripwire: the open path never
-reads/writes a stored pointer), `canonical-chat-creation.test.ts`, `canonical-chat-adopt-on-conflict.test.ts`,
-`bot-row-opens-canonical-chat.test.ts`, `hide-bot-chats.test.ts`; plus repo-root
-`tests/tui_gateway/test_profiles_list_canonical_session.py`.
+レビュアーの帰結: ボットごとのセッションブラウザはない（#90732 で削除。戻さないこと）。
+保存されたセッション ID ポインタを正規のアイデンティティとして拒否する — 「フォールバック層として」や
+「検証のため」も含む。行のターゲットについて新しさ/可視性/「ユーザーが離れた場所」を参照するものは
+すべて拒否する。そのような報告はサイドチャットに関するものであり、修正は Sessions サイドバーの
+非表示スイープに属する。ゲートウェイはレジストリ行を `profiles.list` の `canonical_session` として報告する
+（タイトルによってサーバー側で解決される）。ロスターのプレビュー、アクティビティシグナル、
+`/new`→`/compact` ガードはすべてそれを読むので、プレビューのアイデンティティとクリックの
+アイデンティティは構築上同じ行である。契約テスト:
+`src/plugins/hermes-bots/` 内: `canonical-chat-registry.test.ts`（トリップワイヤー: オープンパスは
+保存されたポインタを決して読み書きしない）、`canonical-chat-creation.test.ts`、
+`canonical-chat-adopt-on-conflict.test.ts`、`bot-row-opens-canonical-chat.test.ts`、
+`hide-bot-chats.test.ts`; さらにリポジトリルートの
+`tests/tui_gateway/test_profiles_list_canonical_session.py`。
 
-### Group chats
+### グループチャット
 
-Follow [the group contract](../docs/canonical-groups.md): offer a control only when the gateway lists
-its method, send only what the generated contract declares, never fall back to classic execution,
-and give a Send's words back only on the gateway's `admitted: false` proof.
+[グループ契約](../docs/canonical-groups.md) に従う: ゲートウェイがそのメソッドをリストするときのみ
+コントロールを提供し、生成された契約が宣言するものだけを送信し、クラシック実行にフォールバックせず、
+ゲートウェイの `admitted: false` 証明があるときのみ Send の言葉を返す。
 
-## Free tier surfaces (`src/store/free-tier*.ts`, Billing, statusbar chip, onboarding ready screen)
+## 無料ティアのサーフェス（`src/store/free-tier*.ts`、Billing、ステータスバーチップ、オンボーディング準備画面）
 
-`$freeTierStatus` mirrors `free_tier.status` (pull; refreshed with the status snapshot and after a
-sign-in). `deriveBillingView` branches on `billing.free_tier_account` BEFORE `logged_in` (status
-`free_tier`: notice + one Sign in, Plan/Model/Connectors summary, no payment or usage rows); the
-`logged_out` notice's Sign in opens the same dialog, never a portal link (a link writes no
-credential). The sign-in dialog is a single claimed owner (first mount wins, like the
-real-profile consent prompt); its states map 1:1 to the poll route's `status` + `reason`. Copy is the ruled free-tier copy: never
-"guest", "anonymous", "claim" or "Nous Portal" in user-facing text.
+`$freeTierStatus` は `free_tier.status` をミラーする（プル。ステータススナップショットと
+サインイン後に更新される）。`deriveBillingView` は `logged_in` の **前** に `billing.free_tier_account` で分岐する
+（ステータス `free_tier`: 通知 + 1 つのサインイン、Plan/Model/Connectors の要約、支払いまたは使用量の行なし）。
+`logged_out` 通知のサインインは同じダイアログを開く。ポータルリンクは決して開かない
+（リンクは資格情報を書き込まない）。サインインダイアログは単一の主張オーナーである
+（最初のマウントが勝つ。実プロファイルの同意プロンプトと同様）。その状態はポールルートの
+`status` + `reason` に 1:1 でマップされる。コピーは規則された無料ティアのコピーである:
+ユーザー向けテキストで「guest」、「anonymous」、「claim」または「Nous Portal」を決して使わない。

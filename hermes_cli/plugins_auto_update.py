@@ -11,7 +11,8 @@ import logging
 import threading
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from typing import Any, Iterator
+from functools import cache
+from typing import Any, Callable, Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -224,11 +225,30 @@ def plugins_slash_action(parts: list[str]) -> list[str]:
 
 # ── after `hermes update` ─────────────────────────────────────────────────────────────────────
 
-def catalog_pins_behind(home: Path) -> list[str]:
+def _catalog_pin_lookup() -> Callable[[str], str | None]:
+    from hermes_cli.plugin_catalog import load_catalog
+
+    @cache
+    def index() -> dict[str, str]:
+        pins = {}
+        for entry in load_catalog():
+            pins.setdefault(entry.name, entry.sha)
+        return pins
+
+    def lookup(name: str) -> str | None:
+        return index().get(name)
+
+    return lookup
+
+
+def catalog_pins_behind(
+    home: Path, *, lookup: Callable[[str], str | None] | None = None
+) -> list[str]:
     """Catalog installs under *home* whose installed pin is not the in-tree catalog's pin. Offline:
     reads the install records and the catalog shipped with this checkout. An install held with
     ``--ref`` is not behind: the user chose that commit."""
-    from hermes_cli.plugin_catalog import get_catalog_entry
+    if lookup is None:
+        lookup = _catalog_pin_lookup()
     from hermes_cli.plugins_cmd_catalog import at_catalog_pin
     from hermes_cli.plugins_provenance import read_sidecar_rows
 
@@ -237,8 +257,8 @@ def catalog_pins_behind(home: Path) -> list[str]:
         block = row.get("catalog") if isinstance(row, dict) else None
         if not isinstance(block, dict) or not block.get("name") or held_with_ref(row):
             continue
-        entry = get_catalog_entry(str(block["name"]))
-        if entry is not None and not at_catalog_pin(block, entry.sha):
+        pin = lookup(str(block["name"]))
+        if pin is not None and not at_catalog_pin(block, pin):
             behind.append(str(name))
     return sorted(behind)
 
@@ -247,8 +267,9 @@ def report_catalog_updates_after_hermes_update(home: Path, sibling_homes: list[t
     """An update can move catalog pins; installed plugins stay on their old pin until updated. Name
     them per profile, and clear that profile's check marker so its gateway re-checks on the next tick
     (which applies them when that profile opted into ``plugins.auto_apply``)."""
+    lookup = _catalog_pin_lookup()
     for label, profile_home in [("this profile", home), *sibling_homes]:
-        behind = catalog_pins_behind(profile_home)
+        behind = catalog_pins_behind(profile_home, lookup=lookup)
         if not behind:
             continue
         _clear_check_marker(profile_home)

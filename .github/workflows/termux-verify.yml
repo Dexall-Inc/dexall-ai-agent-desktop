@@ -2,7 +2,7 @@ name: Termux verification
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
     paths:
       - 'scripts/termux/**'
       - 'pm/**'

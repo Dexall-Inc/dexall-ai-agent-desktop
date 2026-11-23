@@ -9,14 +9,16 @@
 'use strict'
 
 const variants = {
-  '': { display: 'Hermes', kebab: 'hermes', pascal: 'Hermes' },
+  '': { display: 'ALL AI5.2 TACT', legacyDisplay: 'Hermes', kebab: 'hermes', pascal: 'Hermes' },
   light: {
-    display: 'Hermes Light',
+    display: 'ALL AI5.2 TACT Light',
+    legacyDisplay: 'Hermes Light',
     kebab: 'hermes-light',
     pascal: 'HermesLight'
   },
   bundled: {
-    display: 'Hermes Agent',
+    display: 'ALL AI5.2 TACT Bundled',
+    legacyDisplay: 'Hermes Agent',
     kebab: 'hermes-bundled',
     pascal: 'HermesBundled'
   }
@@ -78,7 +80,7 @@ const identity = {
   channel: store || buildCommit ? null : light ? (canary ? 'light-canary' : 'light') : (canary ? 'canary' : 'latest'),
   appNamePascal: `${name.pascal}${pascalSuffix}`,
   artifactNamePascal: name.pascal,
-  windowsExecutableName: kebabSuffix ? cliName : displayName,
+  windowsExecutableName: kebabSuffix ? cliName : name.legacyDisplay,
   cliName,
   msixAppIdWithOrg: `NousResearch.${name.pascal}${pascalSuffix}`,
   ...(store

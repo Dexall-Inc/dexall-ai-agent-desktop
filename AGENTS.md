@@ -1,172 +1,104 @@
-# Hermes Agent - Development Guide
+# Hermes Agent - 開発ガイド
 
-This root file is a hub: what applies everywhere, then a routing table. Each area's `AGENTS.md`
-loads automatically when you work in that directory; read it before editing there.
-`python scripts/check` caps this file at 12k chars and every root-to-area chain at 30k: long form
-goes in `website/docs/developer-guide/`.
+このルートファイルはハブです。どこにでも適用される内容と、その後のルーティングテーブルで構成されています。各エリアの `AGENTS.md` は、そのディレクトリで作業するときに自動的に読み込まれるため、そこで編集する前に読んでください。
+`python scripts/check` はこのファイルを 12k 文字、ルートから各エリアへの連鎖を 30k 文字に制限します。長文は `website/docs/developer-guide/` に置いてください。
 
-**Never give up on the right solution.**
+※開発に関する議論はデフォルトで日本語で行います。
 
-## What Hermes Is
+**正しい解決策を決して諦めない。**
 
-Hermes is a personal AI agent that runs one agent core across a CLI, a TUI, an Electron desktop
-app, a web dashboard, ACP editors and a messaging gateway (25+ platform plugins). It is extended
-through **plugins and skills**, not by growing the core.
+## Hermes とは
 
-Two invariants shape almost every design decision and are the lens for reviewing any change:
+Hermes は、1 つのエージェントコアを CLI、TUI、Electron デスクトップアプリ、Web ダッシュボード、ACP エディタ、メッセージングゲートウェイ（25 以上のプラットフォームプラグイン）で動かすパーソナル AI エージェントです。コアを肥大化させるのではなく、**プラグインとスキル**によって拡張されます。
 
-- **Per-conversation prompt caching is sacred.** Mutating past context, swapping toolsets,
-  reloading memories or rebuilding the system prompt mid-conversation breaks the cached prefix and
-  multiplies the user's cost; the ONE exception is context compression. Slash commands that change
-  system-prompt state defer to the next session, with an opt-in `--now` (`/skills install --now`).
-- **The core is a narrow waist; capability lives at the edges.** Every model tool is sent on
-  every API call, so the bar for a new *core* tool is high. New capability should arrive as a
-  CLI command + skill, a service-gated tool, or a plugin — not as core surface.
+ほぼすべての設計判断を形作り、あらゆる変更をレビューする際の視点となる 2 つの不変条件があります。
 
-A change to the stock system prompt or `tools[]` fails `tests/ci/test_prompt_surface.py` until
-`scripts/ci/prompt_surface.py render` is committed with it, and that snapshot
-(`tests/fixtures/prompt_surface/`) needs a hermes-agent-core approval to merge.
+- **会話ごとのプロンプトキャッシュを維持する。** 過去のコンテキストを変更したり、ツールセットを差し替えたり、メモリを再読み込みしたり、会話の途中でシステムプロンプトを再構築したりすると、キャッシュされたプレフィックスが壊れ、ユーザーのコストが倍増します。唯一の例外はコンテキスト圧縮です。システムプロンプトの状態を変更するスラッシュコマンドは次のセッションに延期され、オプトインの `--now`（`/skills install --now`）が用意されています。
+- **コアの役割を絞り、機能は周辺コンポーネントに持たせます。** すべてのモデルツールは毎回の API 呼び出しで送信されるため、新しい *コア* ツールの基準は高く設定されています。新しい能力は、CLI コマンド + スキル、サービスゲート付きツール、またはプラグインとして追加すべきであり、コアの表面として追加すべきではありません。
 
-## Contribution rubric
+標準システムプロンプトまたは `tools[]` への変更は、`scripts/ci/prompt_surface.py render` が一緒にコミットされるまで `tests/ci/test_prompt_surface.py` に失敗し、そのスナップショット（`tests/fixtures/prompt_surface/`）はマージに hermes-agent-core の承認が必要です。
 
-The project's intent layer, for contributors and for the triage sweeper (which may only close on
-`implemented_on_main`, `cannot_reproduce` or `incoherent`; taste-based closes are a maintainer's
-call, and when in doubt a PR stays open). Long form with examples:
-`website/docs/developer-guide/contributing.md` § Contribution rubric.
+## コントリビューションルーブリック
 
-**Wanted:** real bug fixes (repro on `main`, the exact line, the whole class incl. sibling paths);
-reach at the edges (adapters, providers, models, UI features) wired into the existing setup UX;
-god-file → module refactors; extending before duplicating (3+ PRs in one category → an ABC +
-orchestrator); behaviour-contract tests; E2E with real imports against a temp `HERMES_HOME` for
-resolution, config, security and I/O changes; salvage by cherry-pick so authorship survives.
+このプロジェクトの意図レイヤーであり、コントリビューターとトリアージスイーパー（`implemented_on_main`、`cannot_reproduce`、`incoherent` のみでクローズ可能。趣味ベースのクローズはメンテナーの判断であり、迷った場合は PR は開いたままにします）のためのものです。長文と例は `website/docs/developer-guide/contributing.md` § コントリビューションルーブリックを参照してください。
 
-**Rejected even when well-built:** hooks with no concrete consumer; new `HERMES_*` env vars for
-non-secret config (`.env` is secrets only, behaviour goes in `config.yaml`); a new core tool when
-terminal + file or a skill already does the job; `offset`/`limit` pagination on instructional tools;
-"fixes" that destroy the feature they secure; outbound telemetry without an opt-in gate;
-change-detector tests; plugins that touch core files; third-party products in the core tree (ship a
-standalone plugin repo).
+**歓迎されるもの:** 実際のバグ修正（`main` での再現、正確な行、兄弟パスを含むクラス全体）。エッジでの到達（アダプタ、プロバイダ、モデル、UI 機能）を既存のセットアップ UX に配線すること。god-file → モジュールへのリファクタリング。複製する前に拡張すること（1 カテゴリに 3 つ以上の PR → ABC + オーケストレータ）。挙動契約テスト。一時的な `HERMES_HOME` に対する実際のインポートを使った E2E（解決、設定、セキュリティ、I/O 変更）。著作者が生き残るように cherry-pick による救済。
 
-**Before you call it a bug,** verify the claim AND the intent (`git log -p -S "<symbol>"`): the
-isolation is often the design (profiles are islands on purpose), an absence can be load-bearing,
-and a fix that cannot point to the line where the bug manifests has an unverified premise.
+**よく作られていても却下されるもの:** 具体的な消費者がいないフック。非シークレット設定用の新しい `HERMES_*` 環境変数（`.env` はシークレット専用、挙動は `config.yaml` に置く）。ターミナル + ファイルまたはスキルで既に実現できる場合の新しいコアツール。指示ツールに対する `offset`/`limit` ページネーション。保護する機能を破壊する「修正」。オプトインゲートのないアウトバウンドテレメトリ。変更検出テスト。コアファイルに触れるプラグイン。コアツリー内のサードパーティ製品（スタンドアロンのプラグインリポジトリを出荷する）。
 
-**Security:** `SECURITY.md` is the scope authority. A §3.1 finding goes private (GitHub Security
-Advisories or security@nousresearch.com), never into a public issue, PR, commit or comment; §3.2
-hardening is ordinary public work. Name the §2 boundary crossed, with a repro on `main`.
+**バグと呼ぶ前に、** 主張と意図の両方を検証してください（`git log -p -S "<symbol>"`）。分離はしばしば設計です（プロファイルは意図的に島です）。欠如が荷重を支えている場合があり、バグが現れる行を指し示せない修正は未検証の前提を持っています。
 
-**Footprint ladder** (take the highest rung that solves it): extend existing code → CLI command +
-skill → service-gated tool (`check_fn` answers reachability/opt-in, never per-session surface) →
-plugin → MCP server in the catalog → new core tool (fundamental, broadly useful, unreachable
-otherwise).
+**セキュリティ:** `SECURITY.md` がスコープの権威です。§3.1 の指摘は非公開にします（GitHub Security Advisories または security@nousresearch.com）。公開の issue、PR、コミット、コメントには決して入れません。§3.2 のハードニングは通常の公開作業です。越えた §2 の境界を、`main` での再現とともに明記してください。
 
-## Development Environment
+**フットプリントラダー**（それを解決する最も高い段を取る）: 既存コードの拡張 → CLI コマンド + スキル → サービスゲート付きツール（`check_fn` が到達可能性/オプトインに答える。セッションごとの表面にはしない）→ プラグイン → カタログ内の MCP サーバー → 新しいコアツール（根本的で、広く有用で、それ以外では到達不能なもの）。
 
-`source ./activate` (`activate.fish`, `activate.ps1`) provisions and activates the PM environment; pick an isolated `HERMES_HOME`/`HERMES_RUNTIME_DIR` first
-(`website/docs/reference/package-management.md#developer-workflow`). Tests need the separate test
-environment in `CONTRIBUTING.md`. **`python scripts/check`** (`just check`) runs every blocking
-lint check CI runs, with CI's pinned tools; `--install-hook pre-push` runs it on every push (re-run
-after pulling to refresh the hook). `just` lists every developer command (lefthook calls the same
-recipes); a new command is a `scripts/` file plus a recipe. The `HX0xx`/`PS-P0x` rules and their
-fixes are in `scripts/code_health/config.py`; `# noqa` does not waive a finding,
-`# health: allow <RULE> -- <why>` does.
+## 開発環境
 
-## Project Structure
+`source ./activate`（`activate.fish`、`activate.ps1`）は PM 環境をプロビジョニングしてアクティブ化します。最初に分離された `HERMES_HOME`/`HERMES_RUNTIME_DIR` を選んでください（`website/docs/reference/package-management.md#developer-workflow`）。テストには `CONTRIBUTING.md` にある別のテスト環境が必要です。**`python scripts/check`**（`just check`）は CI が実行するすべてのブロッキング lint チェックを、CI の固定ツールで実行します。`--install-hook pre-push` はプッシュのたびにそれを実行します（プル後に再実行してフックを更新してください）。`just` はすべての開発者コマンドを一覧表示します（lefthook は同じレシピを呼び出します）。新しいコマンドは `scripts/` ファイルとレシピで構成されます。`HX0xx`/`PS-P0x` ルールとその修正は `scripts/code_health/config.py` にあります。`# noqa` は指摘を免除しません。`# health: allow <RULE> -- <why>` がそれを免除します。
 
-The filesystem is canonical. Load-bearing entry points:
+## プロジェクト構造
+
+ファイルシステムが正典です。荷重を支えるエントリポイント:
 
 ```
 hermes-agent/
-├── run_agent.py          # AIAgent facade; the turn loop lives in agent/turn_*.py
-├── model_tools.py        # Tool orchestration, handle_function_call(); discovery in tools/registry.py
-├── toolsets.py           # TOOLSETS dict, _HERMES_CORE_TOOLS
-├── cli.py                # HermesCLI (REPL, slash dispatch) + hermes_cli/cli_*_mixin.py
-├── persistence/          # storage interface and its sqlite/ backend
-├── hermes_constants.py   # get_hermes_home(), display_hermes_home() — profile-aware paths
-├── scripts/              # check, run_tests.sh, code_health/, ci/
-├── evals/                # live-model A/B and probe harnesses
-└── website/              # Docusaurus docs (developer-guide/ holds the long-form area docs)
+├── run_agent.py          # AIAgent ファサード。ターンループは agent/turn_*.py にある
+├── model_tools.py        # ツールオーケストレーション、handle_function_call()。発見は tools/registry.py
+├── toolsets.py           # TOOLSETS 辞書、_HERMES_CORE_TOOLS
+├── cli.py                # HermesCLI（REPL、スラッシュディスパッチ）+ hermes_cli/cli_*_mixin.py
+├── persistence/          # ストレージインターフェースとその sqlite/ バックエンド
+├── hermes_constants.py   # get_hermes_home()、display_hermes_home() — プロファイル対応パス
+├── scripts/              # check、run_tests.sh、code_health/、ci/
+├── evals/                # ライブモデル A/B とプローブハーネス
+└── website/              # Docusaurus ドキュメント（developer-guide/ に長文のエリアドキュメントがある）
 ```
 
-**User state:** `~/.hermes/config.yaml` (settings), `.env` (secrets only), `logs/` (`hermes logs`);
-all profile-aware via `get_hermes_home()`.
+**ユーザー状態:** `~/.hermes/config.yaml`（設定）、`.env`（シークレットのみ）、`logs/`（`hermes logs`）。すべて `get_hermes_home()` でプロファイル対応。
 
-### Packages and Python shape
+### パッケージと Python の形
 
-A topic that outgrows its file becomes a folder: `<stem>/__init__.py` is the **facade** (its
-docstring names each module's job, `__all__` is the surface, PEP 562 `__getattr__` only for a
-measured startup cost or import hazard it names; no behaviour; `tools/connectors/` is the model),
-`<stem>/<topic>.py` holds the code. Flat `<stem>_<topic>.py` siblings (`gateway/run.py`,
-`tools/mcp_tool.py`) stay until touched; add none unless an area AGENTS.md still prescribes one
-(`tui_gateway` RPC methods, `tools/` backends). A family folder keeps its ABC/Protocol, one module
-per variant and a name → variant table (`tools/environments/`, its table still in
-`terminal_tool_backends.py`). Tool folders register from `tool.py`; tests mirror folders.
+トピックがファイルを超えて成長したらフォルダになります。`<stem>/__init__.py` は**ファサード**です（その docstring が各モジュールの役割を命名し、`__all__` が表面であり、PEP 562 の `__getattr__` は測定された起動コストまたはそれが命名するインポートハザードのためだけに使います。挙動はありません。`tools/connectors/` がそのモデルです）。`<stem>/<topic>.py` がコードを保持します。フラットな `<stem>_<topic>.py` の兄弟（`gateway/run.py`、`tools/mcp_tool.py`）は触られるまで残ります。エリアの `AGENTS.md` がまだそれを規定していない限り追加しないでください（`tui_gateway` の RPC メソッド、`tools/` のバックエンド）。ファミリーフォルダは ABC/Protocol、バリアントごとに 1 モジュール、名前 → バリアントのテーブルを保持します（`tools/environments/`、そのテーブルはまだ `terminal_tool_backends.py` にあります）。ツールフォルダは `tool.py` から登録します。テストはフォルダをミラーします。
 
-- **Find code by topic:** `search_files` for `def name` in `<stem>/` and `<stem>_*.py`, not the facade.
-- **Imports go at module top:** topic modules import one another, never the facade; a cycle means
-  a shared name belongs in a lower module. Patch where the name is looked up.
-- **Size and complexity are ratcheted per unit:** new functions CC ≤ 20, ≤ 300 lines, nesting ≤ 6;
-  files ≤ 2,000 lines; units already over may only go down (move code into `<stem>/`).
-- **Shape:** code imports on 3.11 (no PEP 695 syntax); import has no side effect but tool registration
-  (no I/O, threads, config or env reads); input is parsed where it enters into a frozen dataclass, `Enum`,
-  `Literal` or the area's wire model (Pydantic in `tui_gateway`); one return shape per function;
-  dispatch by table, not `if name ==` ladders; collaborators are objects, not mixins; no module
-  constant kept only for tests to patch.
-- **No re-export shims for internal moves;** internal paths are not API. Moving a symbol means
-  fixing its docs in the same PR (search `website/docs`, `skills/`, every `AGENTS.md`).
+- **トピックでコードを探す:** `search_files` で `<stem>/` と `<stem>_*.py` 内の `def name` を検索します。ファサードではなく。
+- **インポートはモジュールの先頭に:** トピックモジュールは相互にインポートし、ファサードは決してインポートしません。循環は共有名がより低いモジュールに属することを意味します。名前が検索される場所にパッチを当ててください。
+- **サイズと複雑さはユニットごとにラチェットされます:** 新しい関数は CC ≤ 20、≤ 300 行、ネスト ≤ 6。ファイルは ≤ 2,000 行。既に超過しているユニットは減る方向のみ（コードを `<stem>/` に移動）。
+- **形:** コードは 3.11 でインポートします（PEP 695 構文なし）。インポートはツール登録以外に副作用を持ちません（I/O、スレッド、設定、環境変数の読み取りなし）。入力は、凍結 dataclass、`Enum`、`Literal`、またはエリアのワイヤモデル（`tui_gateway` では Pydantic）に入る場所で解析されます。関数ごとに 1 つの戻り値の形。`if name ==` のラダーではなくテーブルによるディスパッチ。協力者はミックスインではなくオブジェクト。テストがパッチするためだけに保持されるモジュール定数はありません。
+- **内部移動のための再エクスポートシムはありません。** 内部パスは API ではありません。シンボルを移動するということは、同じ PR でそのドキュメントを修正することを意味します（`website/docs`、`skills/`、すべての `AGENTS.md` を検索）。
 
-## Rules that apply everywhere
+## どこにでも適用されるルール
 
-- **No defensive clutter:** no wrappers or `try/except: pass` around code that cannot fail, no flags
-  nobody sets, no dead code wired in without E2E proof. Comments keep the WHY, cut the WHAT.
-- **Never infer process identity from argv substrings;** use
-  `gateway.status.looks_like_gateway_command_line` / `hermes_cli.update_cmd._hermes_holder_subcommand`
-  (HX003).
-- **Never hardcode `~/.hermes`:** `get_hermes_home()` for paths, `display_hermes_home()` for text
-  (HX001). `_get_profiles_root()` is HOME-anchored on purpose.
-- **One process serves many profiles.** Code that runs outside a turn (boot probes, eviction,
-  tickers, deferred callbacks, RPC methods, thread hops, child spawns) binds the owning profile scope
-  explicitly; `os.environ`, module globals and import-time values hold the launch profile's, so an
-  unbound read is a silent default-profile leak. Binding points and seams: `gateway/AGENTS.md`
-  § Profile scope (HX002/HX004/HX005/HX012, PS-P05/P06).
-- **Machine facts and executable lookup go through `hermes_platform`.**
-- **Dependencies carry upper bounds** (`>=floor,<next_major`; git URLs and Actions pinned to a SHA);
-  after editing `pyproject.toml` run `hermes pm lock` and commit `uv.lock`; never mutate a Hermes
-  environment with raw pip/uv.
-- **TypeScript (desktop, TUI):** feature-owned nanostores over threaded state, thin route roots,
-  narrow hooks and colocated action modules, `interface` for props and shared shapes, table-driven
-  dispatch over condition ladders; desktop keeps routes in `src/app`, atoms in `src/store`, pure
-  helpers in `src/lib`.
-- **Don't add core/plugin crossings:** core never imports a specific bundled plugin, and plugins
-  use only the published plugin API (`hermes_cli/data/plugin_api.json`, `ctx`). Existing crossings
-  are baselined; `scripts/boundary_lint.py` fails the test suite (not `scripts/check`) on new ones.
-- **A new config key or slash command ships with its docs** (`tests/ci/test_docs_drift.py`).
-- **Commits and PRs:** rebase onto `main` before merging (a squash from a stale branch silently
-  reverts newer fixes); 1–2 invariant tests per fix, proven red on the base.
-- **Tests:** always `scripts/run_tests.sh`, never bare `pytest`; behaviour contracts, never
-  change-detectors or source-reading tests; host-specific behaviour is tested on that host with
-  `@pytest.mark.platforms(...)`, never by faking `sys.platform`; tests never write to `~/.hermes/`.
+- **防御的な雑然さを置かない:** 失敗し得ないコードの周りにラッパーや `try/except: pass` を置かない。誰も設定しないフラグを置かない。E2E の証明なしに配線されたデッドコードを置かない。コメントは WHY を保ち、WHAT を削る。
+- **argv の部分文字列からプロセス同一性を推測しない。** `gateway.status.looks_like_gateway_command_line` / `hermes_cli.update_cmd._hermes_holder_subcommand` を使う（HX003）。
+- **`~/.hermes` をハードコードしない:** パスには `get_hermes_home()`、テキストには `display_hermes_home()`（HX001）。`_get_profiles_root()` は意図的に HOME にアンカーされています。
+- **1 つのプロセスが多くのプロファイルにサービスを提供します。** ターンの外で実行されるコード（起動プローブ、エビクション、ティッカー、遅延コールバック、RPC メソッド、スレッドホップ、子プロセス生成）は、所有プロファイルのスコープを明示的にバインドします。`os.environ`、モジュールグローバル、インポート時の値は起動プロファイルのものを保持するため、バインドされていない読み取りはサイレントなデフォルトプロファイルのリークです。バインドポイントと継ぎ目: `gateway/AGENTS.md` § プロファイルスコープ（HX002/HX004/HX005/HX012、PS-P05/P06）。
+- **マシン事実と実行可能ファイルの検索は `hermes_platform` を通ります。**
+- **依存関係は上限を持ちます**（`>=floor,<next_major`。git URL と Actions は SHA に固定）。`pyproject.toml` を編集した後は `hermes pm lock` を実行して `uv.lock` をコミットします。生の pip/uv で Hermes 環境を決して変更しない。
+- **TypeScript（デスクトップ、TUI）:** スレッド化された状態よりも機能所有のナノストア、薄いルートルート、狭いフックと同一場所のアクションモジュール、props と共有形状には `interface`、条件ラダーよりもテーブル駆動のディスパッチ。デスクトップはルートを `src/app`、アトムを `src/store`、純粋なヘルパーを `src/lib` に保持します。
+- **コア/プラグインの交差を追加しない:** コアは特定のバンドル済みプラグインを決してインポートせず、プラグインは公開されたプラグイン API（`hermes_cli/data/plugin_api.json`、`ctx`）のみを使います。既存の交差はベースライン化されています。`scripts/boundary_lint.py` は新しいものに対してテストスイート（`scripts/check` ではなく）を失敗させます。
+- **新しい設定キーまたはスラッシュコマンドはドキュメントと一緒に出荷されます**（`tests/ci/test_docs_drift.py`）。
+- **コミットと PR:** マージ前に `main` にリベースします（古いブランチからのスカッシュは新しい修正をサイレントに巻き戻します）。修正ごとに 1–2 個の不変条件テストを、ベースで赤であることを証明して。
+- **テスト:** 常に `scripts/run_tests.sh`。裸の `pytest` は決して。挙動契約であり、変更検出器やソース読み取りテストは決して。ホスト固有の挙動はそのホストで `@pytest.mark.platforms(...)` を使ってテストし、`sys.platform` を偽装しては決して。テストは `~/.hermes/` に決して書き込みません。
 
-## Routing Table
+## ルーティングテーブル
 
-| Area | Read | Covers |
+| エリア | 読む | カバー |
 |---|---|---|
-| `run_agent.py`, `agent/` | `agent/AGENTS.md` | turn phases, message-flow invariants, compression, model/aux resolution, i18n |
-| `cli.py`, `hermes_cli/` | `hermes_cli/AGENTS.md` | CLI mixins, slash registry, config system, skins, `hermes update`, profiles / multiplex |
-| `gateway/` | `gateway/AGENTS.md` | adapters, message guards, streaming, notifications, token locks, § Profile scope |
-| `plugins/platforms/` new adapter | `gateway/platforms/ADDING_A_PLATFORM.md` | step-by-step adapter guide |
-| `tools/`, `toolsets.py`, `model_tools.py` | `tools/AGENTS.md` | adding tools, registry, toolsets, delegation, session-scoped surface tools |
-| `plugins/`, `hermes_cli/plugins*.py` | `plugins/AGENTS.md` | plugin kinds, native compat contract, in-tree policy, boundary lint |
-| `plugin-catalog/` | `plugin-catalog/README.md` | catalog admission rules (mirrored in the developer guide; keep identical) |
-| `tui_gateway/`, `ui-tui/` | `tui_gateway/AGENTS.md` | process model, JSON-RPC transport, slash flow |
-| `web/`, `hermes_cli/web_routers/` | `web/AGENTS.md` | dashboard embeds the real TUI |
-| `apps/desktop/` | `apps/desktop/AGENTS.md`, `apps/desktop/src/AGENTS.md` | state authority, gateway backend contract, slash palette, Bot Mode |
-| `skills/`, `optional-skills/`, `agent/curator*.py` | `skills/AGENTS.md` | frontmatter, authoring standards, curator |
-| `cron/`, kanban | `cron/AGENTS.md` | scheduler invariants, job fields, kanban dispatcher |
-| `tests/` | `tests/AGENTS.md` | runner, placement, OS markers, `wine2e`, banned test shapes |
-| `pm/`, `pyproject.toml` | `pm/AGENTS.md` | pinning policy, PM-owned environments, release-age rule |
-| `hermes_platform/` | `hermes_platform/AGENTS.md` | host facts, resolvers |
-| `acp_adapter/` | `website/docs/developer-guide/acp-internals.md` | ACP server for editors |
-| `providers/` | `providers/README.md` | `ProviderProfile` registry and ABC |
+| `run_agent.py`、`agent/` | `agent/AGENTS.md` | ターンフェーズ、メッセージフロー不変条件、圧縮、モデル/aux 解決、i18n |
+| `cli.py`、`hermes_cli/` | `hermes_cli/AGENTS.md` | CLI ミックスイン、スラッシュレジストリ、設定システム、スキン、`hermes update`、プロファイル / マルチプレックス |
+| `gateway/` | `gateway/AGENTS.md` | アダプタ、メッセージガード、ストリーミング、通知、トークンロック、§ プロファイルスコープ |
+| `plugins/platforms/` 新しいアダプタ | `gateway/platforms/ADDING_A_PLATFORM.md` | ステップバイステップのアダプタガイド |
+| `tools/`、`toolsets.py`、`model_tools.py` | `tools/AGENTS.md` | ツール追加、レジストリ、ツールセット、委任、セッションスコープの表面ツール |
+| `plugins/`、`hermes_cli/plugins*.py` | `plugins/AGENTS.md` | プラグインの種類、ネイティブ互換契約、ツリー内ポリシー、境界 lint |
+| `plugin-catalog/` | `plugin-catalog/README.md` | カタログ受け入れルール（開発者ガイドにミラー。同一に保つ） |
+| `tui_gateway/`、`ui-tui/` | `tui_gateway/AGENTS.md` | プロセスモデル、JSON-RPC トランスポート、スラッシュフロー |
+| `web/`、`hermes_cli/web_routers/` | `web/AGENTS.md` | ダッシュボードは実際の TUI を埋め込む |
+| `apps/desktop/` | `apps/desktop/AGENTS.md`、`apps/desktop/src/AGENTS.md` | 状態権威、ゲートウェイバックエンド契約、スラッシュパレット、Bot モード |
+| `skills/`、`optional-skills/`、`agent/curator*.py` | `skills/AGENTS.md` | frontmatter、執筆基準、キュレーター |
+| `cron/`、kanban | `cron/AGENTS.md` | スケジューラ不変条件、ジョブフィールド、kanban ディスパッチャ |
+| `tests/` | `tests/AGENTS.md` | ランナー、配置、OS マーカー、`wine2e`、禁止されたテスト形状 |
+| `pm/`、`pyproject.toml` | `pm/AGENTS.md` | ピン留めポリシー、PM 所有環境、リリース年齢ルール |
+| `hermes_platform/` | `hermes_platform/AGENTS.md` | ホスト事実、リゾルバ |
+| `acp_adapter/` | `website/docs/developer-guide/acp-internals.md` | エディタ用 ACP サーバー |
+| `providers/` | `providers/README.md` | `ProviderProfile` レジストリと ABC |
 
-PR workflow: `CONTRIBUTING.md` (maintainers: the `hermes-agent-dev` skill, not shipped here).
+PR ワークフロー: `CONTRIBUTING.md`（メンテナー向け: `hermes-agent-dev` スキル。ここには出荷されません）。

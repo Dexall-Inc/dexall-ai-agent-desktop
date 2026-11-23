@@ -209,9 +209,11 @@ def format_banner_version_label() -> str:
     from hermes_cli.steward import read_install_stamp
     from hermes_cli.update_channel import is_canary_tag
 
+    from hermes_cli.tact_banner import PRODUCT_NAME
+
     stamp = read_install_stamp(get_project_root())
     if stamp.get("distribution") == "desktop-app":
-        label = f"Hermes Agent v{get_version_info().derived_version}"
+        label = f"{PRODUCT_NAME} v{get_version_info().derived_version}"
         if stamp.get("source") == "commit-build":
             return f"{label} · commit-build · {str(stamp.get('commit') or '')[:12]}"
         if stamp.get("tag"):
@@ -224,7 +226,7 @@ def format_banner_version_label() -> str:
             return f"{label} · installer"
         return label
 
-    base = f"Hermes Agent v{get_version_info().derived_version} ({RELEASE_DATE})"
+    base = f"{PRODUCT_NAME} v{get_version_info().derived_version} ({RELEASE_DATE})"
     from hermes_cli.config import load_config
     from hermes_cli.update_channel import resolve_update_channel
 
@@ -700,7 +702,10 @@ def build_welcome_banner(
     text = _skin_color("banner_text", "#FFF8DC")
     # Use skin's custom caduceus art if provided
     _bskin = _quiet(_active_skin)
-    left_lines = ["", getattr(_bskin, "banner_hero", None) or HERMES_CADUCEUS, ""]
+    from hermes_cli.tact_banner import spark_preview
+    tact_default = getattr(_bskin, "name", "default") == "default"
+    hero = spark_preview() if tact_default else HERMES_CADUCEUS
+    left_lines = ["", getattr(_bskin, "banner_hero", None) or hero, ""]
     left_lines += _banner_left_lines(model, cwd, session_id, context_length, provider, accent=accent, dim=dim,
                                      context_pinned=context_pinned, context_marker=context_marker)
     right_lines = _banner_tool_lines(
@@ -761,7 +766,8 @@ def build_welcome_banner(
         layout_table, title=f"[bold {_skin_color('banner_title', '#FFD700')}]{version_label}[/]",
         border_style=_skin_color("banner_border", "#CD7F32"), padding=(0, 2))
     console.print()
-    if shutil.get_terminal_size().columns >= 95:
-        console.print(getattr(_bskin, "banner_logo", None) or HERMES_AGENT_LOGO)
+    custom_logo = getattr(_bskin, "banner_logo", None)
+    if shutil.get_terminal_size().columns >= 95 and (custom_logo or not tact_default):
+        console.print(custom_logo or HERMES_AGENT_LOGO)
         console.print()
     console.print(outer_panel)

@@ -2,7 +2,7 @@ name: Archive pinned PM inputs
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
     paths:
       - 'pm/lock.json'
       - 'pm/artifact-mirror.json'
