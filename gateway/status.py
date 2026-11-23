@@ -880,6 +880,9 @@ def _live_pid_from_record(record: Optional[dict[str, Any]]) -> Optional[int]:
     pid = _pid_from_record(record)
     if pid is None or not _pid_exists(pid):
         return None
+    from gateway.darwin_exit_lock import process_is_exiting
+    if process_is_exiting(pid, record.get("start_time")):
+        return None
     if _start_times_conflict(record.get("start_time"), _get_process_start_time(pid)):
         return None
     return pid

@@ -523,21 +523,54 @@ def claim_host_lock(role: str) -> tuple[HostLockOutcome, Optional[OSError]]:
     key = _lock_key(role)
     if _lock_handles.get(key) is not None:
         return (HostLockOutcome.ACQUIRED, None)
-    from gateway.status import _try_acquire_file_lock
+    from gateway.darwin_exit_lock import replace_exiting_lock, serialize_claim
+    from gateway.status import _try_acquire_file_lock, get_process_start_time
+    from gateway.runtime_ownership import _still_names
 
     path = Path(key[1])
     try:
         ensure_host_state_dir()
-        handle = open(path, "a+", encoding="utf-8")
+        with serialize_claim(path) as allowed:
+            if not allowed:
+                return (HostLockOutcome.HELD_BY_OTHER, None)
+            for attempt in range(2):
+                handle = open(path, "a+", encoding="utf-8")
+                try:
+                    if _try_acquire_file_lock(handle) and _still_names(path, handle.fileno()):
+                        if sys.platform == "darwin":
+                            # Publish the inode's owner before releasing the interlock. The
+                            # separate rendezvous record can still name the previous process.
+                            handle.seek(0)
+                            handle.truncate()
+                            json.dump({"pid": os.getpid(), "start_time": get_process_start_time(os.getpid())}, handle)
+                            handle.flush()
+                        _lock_handles[key] = handle
+                        return (HostLockOutcome.ACQUIRED, None)
+                    if attempt or sys.platform != "darwin":
+                        return (HostLockOutcome.HELD_BY_OTHER, None)
+                    handle.seek(0)
+                    raw_owner = handle.read(4096)
+                    if raw_owner:
+                        try:
+                            payload = json.loads(raw_owner)
+                            pid, start = int(payload["pid"]), payload["start_time"]
+                        except (ValueError, KeyError, TypeError):
+                            return (HostLockOutcome.HELD_BY_OTHER, None)
+                    else:
+                        # Upgrade from a gateway that only wrote the rendezvous record.
+                        owner = read_record(role, include_stale=True)
+                        if owner is None:
+                            return (HostLockOutcome.HELD_BY_OTHER, None)
+                        pid, start = owner.pid, owner.start_time
+                    if not replace_exiting_lock(path, handle, pid, start):
+                        return (HostLockOutcome.HELD_BY_OTHER, None)
+                finally:
+                    if _lock_handles.get(key) is not handle:
+                        handle.close()
     except OSError as exc:
         logger.debug("host %s lock could not be opened at %s", role, path, exc_info=True)
         return (HostLockOutcome.COULD_NOT_OPEN, exc)
-    if not _try_acquire_file_lock(handle):
-        with contextlib.suppress(OSError):
-            handle.close()
-        return (HostLockOutcome.HELD_BY_OTHER, None)
-    _lock_handles[key] = handle
-    return (HostLockOutcome.ACQUIRED, None)
+    return (HostLockOutcome.HELD_BY_OTHER, None)
 
 
 def release_host_lock(role: str) -> None:

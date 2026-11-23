@@ -146,6 +146,25 @@ def _still_names(path: Path, fd: int) -> bool:
         return False
 
 
+def _claim_runtime_lock(path: Path):
+    from gateway.darwin_exit_lock import replace_exiting_lock
+    from gateway.status import _pid_from_record, _read_gateway_lock_record, _try_acquire_file_lock
+
+    for attempt in range(2):
+        handle = os.fdopen(_open_lock(path), 'r+', encoding='utf-8')
+        try:
+            if _try_acquire_file_lock(handle) and _still_names(path, handle.fileno()):
+                return handle
+            record = _read_gateway_lock_record(path) or {}
+            pid = _pid_from_record(record)
+            if attempt or pid is None or not replace_exiting_lock(path, handle, pid, record.get('start_time')):
+                raise OwnershipConflict(f'Gateway runtime already owns profile {path.parent}')
+        except BaseException:
+            handle.close()
+            raise
+        handle.close()
+
+
 # Homes whose gateway.lock a ProfileOwnership in THIS process holds right now, with the pid that
 # took it. A forked child answers False here, but it shares the flock's open file description and
 # the inherited process_ownership, so runtime_lock_held_elsewhere() still answers False for it too.
@@ -175,7 +194,8 @@ class ProfileOwnership:
     def reserve(self, homes, *, purpose: str | None = None) -> None:
         """``purpose`` marks a maintenance reservation in the lock record, so a contender can tell
         a short maintenance holder from a gateway runtime owner (:func:`live_runtime_owner`)."""
-        from gateway.status import _try_acquire_file_lock, _build_pid_record
+        from gateway.darwin_exit_lock import serialize_claim
+        from gateway.status import _build_pid_record
         with self._mutex:
             added = []
             try:
@@ -184,22 +204,22 @@ class ProfileOwnership:
                         continue
                     make_user_dir(home, mode=0o700, parents=True, exist_ok=True)
                     path = home / 'gateway.lock'
-                    fd = _open_lock(path)
-                    handle = os.fdopen(fd, 'r+', encoding='utf-8')  # windows-footgun: ok — write-only
-                    try:
-                        if not _try_acquire_file_lock(handle) or not _still_names(path, handle.fileno()):
-                            raise OwnershipConflict(f'Gateway runtime already owns profile {home}')
-                        record = {**_build_pid_record(), 'hermes_home': str(home)}
-                        if purpose:
-                            record['purpose'] = purpose
-                        handle.seek(0)
-                        handle.truncate()
-                        json.dump(record, handle)
-                        handle.flush()
-                        os.fsync(handle.fileno())
-                    except BaseException:
-                        handle.close()
-                        raise
+                    with serialize_claim(path) as allowed:
+                        if not allowed:
+                            raise OwnershipConflict(f'Gateway runtime claim in progress for {home}')
+                        handle = _claim_runtime_lock(path)
+                        try:
+                            record = {**_build_pid_record(), 'hermes_home': str(home)}
+                            if purpose:
+                                record['purpose'] = purpose
+                            handle.seek(0)
+                            handle.truncate()
+                            json.dump(record, handle)
+                            handle.flush()
+                            os.fsync(handle.fileno())
+                        except BaseException:
+                            handle.close()
+                            raise
                     self._handles[home] = handle
                     with _held_here_mutex:
                         _held_here[home] = os.getpid()
