@@ -59,6 +59,20 @@ test.describe('dev-mode boot with mock backend', () => {
     await expect(fixture!.page.getByRole('heading', { name: 'ALL AI5.2 TACT', exact: true })).toBeVisible()
   })
 
+  test('keeps the original TACT portrait in dark appearance', async () => {
+    const { page } = fixture!
+    await waitForAppReady(fixture!, 120_000)
+    await page.emulateMedia({ colorScheme: 'dark' })
+
+    try {
+      await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+      await expect(page.locator('[data-slot="aui_intro"] img')).toHaveAttribute('src', /\/nous-girl\.png$/)
+      await expect(page.locator('[data-tour="sessions-sidebar"] img').first()).toHaveAttribute('src', /\/nous-girl\.png$/)
+    } finally {
+      await page.emulateMedia({ colorScheme: null })
+    }
+  })
+
   test('screenshot after boot', async () => {
     await expectVisualSnapshot(fixture!.page, { name: 'boot-ready', app: fixture!.app })
   })
